@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Oct 23 22:49:12 2024
 
-@author: tommy
-"""
 
 import glob
 from pathlib import Path
