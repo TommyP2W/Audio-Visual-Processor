@@ -28,7 +28,8 @@ def toMagFrames(speech):
     num_samples = len(speech)
     frame_length = 320 #this is 20ms as the length of speech file is in freq
     num_of_frames = math.floor((num_samples-frame_length)/(frame_length/2)) #calcs the number of frames, so i can create a array of appropraite size
-    mag_frames = [None] * (num_of_frames+1) #empty list that can fit the number of frames
+    mag_frames = np.zeros(num_of_frames+1) #empty list that can fit the number of frames
+    mag_frames = [None] * (num_of_frames+1)
     for index in np.arange(0,num_samples-frame_length,int(frame_length/2)):
         startIndex = index # compute first sample of frame
         endIndex = index + frame_length # compute last sample of frame
@@ -88,7 +89,7 @@ def triangularFBank (binlist):
     
 def applyFbankLogDCT(mag_frames):
     mfcc = np.zeros(shape = (len(tri_fbanks)-2,len(mag_frames)))
-    for indexfbank in range (1,len(tri_fbanks)-2):
+    for indexfbank in range (1,len(tri_fbanks)-1):
         for indexmag in range (0, len(mag_frames)-1): #to leave out the first value (0) and the last one too
             #print("mag frames:", len(mag_frames))
             #print("shape of c:", np.shape(c))
@@ -103,7 +104,10 @@ def applyFbankLogDCT(mag_frames):
         mfcc[indexfbank-1] = spy.fft.dct(mfcc[indexfbank-1])
     print(np.shape(mfcc))
     #print(mfcc[0])
-    plt.imshow(mfcc, origin='lower')
+    plt.plot(mfcc[7])
+    print(mfcc[7])
+    #plt.imshow(mfcc, origin='lower')
+    
             #removing latter half to try and remove the pitch, may need to change what % is being removed
             #mfcc = mfcc[index[0:int(len(mfcc[index]/2))]]
     np.save('test', mfcc)    
