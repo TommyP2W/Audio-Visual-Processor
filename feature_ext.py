@@ -7,10 +7,11 @@ Created on Thu Oct 24 12:34:53 2024
 
 
 import numpy as np
+import scipy as spy
 import plotly.io as pio
 import plotly.express as px
 import sounddevice as sd
-import matplotlib.pyplot as pypl
+import matplotlib.pyplot as plt
 import soundfile as sf 
 import math
 
@@ -54,7 +55,8 @@ def melSpacedPoints (minFreq, maxFreq, fbanks):
 #Input: a list of 'bins' from the MelSpacedPoints function (just a list of numbers)
 #Output: a list of triangular fbank vectors (which in themselves are lists of points)
 def triangularFBank (binlist):
-    triVector = [len(binlist)] #list of length of the amount of bins
+    triVector = np.zeros(160)
+    all_fbank_vectors = np.zeros(shape=(len(binlist),160))
     for index in range (1,len(binlist)-1):
         currentPeak = binlist[index]
         pastPeak = binlist[index - 1]
@@ -68,24 +70,56 @@ def triangularFBank (binlist):
                 triValue = (nextPeak - k)/(nextPeak - currentPeak)
             if (k > nextPeak):
                 triValue = 0
-            triVector[index][k] = triValue
-    return triVector
+            triVector[k] = triValue
+        all_fbank_vectors[index] = triVector 
+        #plt.plot(all_fbank_vectors[index])
+    return all_fbank_vectors
 
+# def applyFbankLogDCT(mag_frames):
+#     mfcc = [None] * len(mag_frames)
+#     for index in range (len(mag_frames)):
+#         for k in range (len(tri_fbanks)):
+#             #matmul every mag frame but each tribank filter
+#             #then log it, then apply dct equation
+#             mfcc[index] = np.fft.dct(math.log10(np.matmul(mag_frames[index],tri_fbanks[k])))
+#             #removing latter half to try and remove the pitch, may need to change what % is being removed
+#             mfcc[index] = mfcc[index[0:int(len(mfcc[index]/2))]]
+#     np.save('test', mfcc)
+    
 def applyFbankLogDCT(mag_frames):
-    mfcc = [None] * len(mag_frames)
-    for index in range (len(mag_frames)):
-        for k in range (len(tri_fbanks)):
+    mfcc = np.zeros(shape = (len(tri_fbanks)-2,len(mag_frames)))
+    for indexfbank in range (1,len(tri_fbanks)-2):
+        for indexmag in range (0, len(mag_frames)-1): #to leave out the first value (0) and the last one too
+            #print("mag frames:", len(mag_frames))
+            #print("shape of c:", np.shape(c))
             #matmul every mag frame but each tribank filter
             #then log it, then apply dct equation
-            mfcc[index] = np.fft.dct(math.log10(np.matmul(mag_frames[index],tri_fbanks[k])))
+            #a = np.matmul(mag_frames[indexmag],tri_fbanks[indexfbank])
+            #print("a fine:", a)
+            #b = math.log10(a)
+            #print("b fine:", b)
+            #c[indexfbank][indexmag] = b
+            mfcc[indexfbank-1][indexmag] = math.log10(np.matmul(mag_frames[indexmag],tri_fbanks[indexfbank]))
+        mfcc[indexfbank-1] = spy.fft.dct(mfcc[indexfbank-1])
+    print(np.shape(mfcc))
+    #print(mfcc[0])
+    plt.imshow(mfcc, origin='lower')
             #removing latter half to try and remove the pitch, may need to change what % is being removed
-            mfcc[index] = mfcc[index[0:int(len(mfcc[index]/2))]]
-    np.save('test', mfcc)
+            #mfcc = mfcc[index[0:int(len(mfcc[index]/2))]]
+    np.save('test', mfcc)    
+    
+    
+    #week 3 volecity and accelerations
+    #[40,12] from shaping the mfccs, 40 was 8 (number of fbanks) originally but adjusted with acel and vel stuff - called mfcc features
+    #12/the number that changes is number of frames. ours is way larger cause they recorded at 8kHz and are quicker at recording less no noise bits
+
     
 bins = melSpacedPoints(0, 8000, 8)
 tri_fbanks = triangularFBank(bins)
+print(np.shape(tri_fbanks)) #10,160
+print(len(tri_fbanks)) #10
 speechFile, fs = sf.read('look_out.wav', dtype='float32')
-toMagFrames(speechFile)
+applyFbankLogDCT(toMagFrames(speechFile))
 
 
 
