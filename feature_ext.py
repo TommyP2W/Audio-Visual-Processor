@@ -109,21 +109,22 @@ def applyFbankLogDCT(mag_frames):
             #mfcc[indexfbank-1] = spy.fft.dct(mfcc[indexfbank-1])
     for indexdct in range (0,len(mag_frames)-1):    
         mfcc[:,indexmag] = spy.fft.dct(mfcc[:,indexmag])
-        print(len(mfcc[:,indexmag]))
+        #print(len(mfcc[:,indexmag]))
     plt.plot(mfcc[:,3])
-    for indexvmfcc in range (1, tri_cut-2): #1 to 6 (6)
+    for indexvmfcc in range (1, tri_cut-2): #1 to 32 (6)
         row_n = mfcc.shape[0]#bottom row
         mfcc = np.insert(mfcc,row_n,np.zeros(len(mag_frames)),axis=0) #add new row of length mag frames
         for indexvel in range (0, len(mfcc[indexvmfcc])-1): #0 to 279 (for example)
-            velocity = mfcc[indexvmfcc-1][indexvel] - mfcc[indexvmfcc+1][indexvel]
+            velocity = mfcc[indexvmfcc+1][indexvel] - mfcc[indexvmfcc-1][indexvel]
             mfcc[row_n][indexvel] = velocity #putting the velocity in the new row
+    for indexamfcc in range (1, tri_cut-4): #1 to 30 (6)
+        row_n = mfcc.shape[0]#bottom row
+        mfcc = np.insert(mfcc,row_n,np.zeros(len(mag_frames)),axis=0) #add new row of length mag frames
+        for indexacc in range (0, len(mfcc[indexamfcc])-1): #0 to 279 (for example)
+            velocity = mfcc[indexamfcc+1][indexacc] - mfcc[indexamfcc-1][indexacc]
+            mfcc[row_n][indexacc] = velocity #putting the velocity in the new row
     print(np.shape(mfcc))
-    print(mfcc[:,2])
-    #print(mfcc[16])
-    #plt.imshow(mfcc, origin='lower')
-    
-            #removing latter half to try and remove the pitch, may need to change what % is being removed
-            #mfcc = mfcc[index[0:int(len(mfcc[index]/2))]]
+    print(mfcc[90])
     np.save('test', mfcc)    
     
     
