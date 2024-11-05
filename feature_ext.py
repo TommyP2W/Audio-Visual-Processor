@@ -122,34 +122,39 @@ def applyFbankLogDCT(mag_frames):
         # # plt.colorbar()
         # plt.show()
         
+    # for indexpitch in range (math.floor((2/3) * (mfcc.shape[0]-1)),mfcc.shape[0]): #takes off last 33% of dct- pitch
+    #     mfcc[indexpitch] = 0
+        
+    for indexpitch in range (math.floor((1/2) * (mfcc.shape[0]-1)),mfcc.shape[0]): #takes off last 33% of dct- pitch
+        mfcc[indexpitch] = 0
+        
+        
     # plt.plot(mfcc[:,40])
     # plt.figure()
     # plt.hist(mfcc)
     # # plt.colorbar()
     # print(mfcc)
     # plt.show()
-    for indexvmfcc in range (1, tri_cut-2): #1 to 32 (6) #velocity calced and rows added to mfcc
-        row_n = mfcc.shape[0]#bottom row
-        mfcc = np.insert(mfcc,row_n,np.zeros(len(mag_frames)),axis=0) #add new row of length mag frames
-        for indexvel in range (0, len(mfcc[indexvmfcc])-1): #0 to 279 (for example)
-            velocity = mfcc[indexvmfcc+1][indexvel] - mfcc[indexvmfcc-1][indexvel]
-            mfcc[row_n][indexvel] = velocity #putting the velocity in the new row
-    for indexamfcc in range (1, tri_cut-4): #1 to 30 (6) #acceleration calced and rows added to mfcc
-        row_n = mfcc.shape[0]#new bottom row
-        mfcc = np.insert(mfcc,row_n,np.zeros(len(mag_frames)),axis=0) #add new row of length mag frames
-        for indexacc in range (0, len(mfcc[indexamfcc])-1): #0 to 279 (for example)
-            velocity = mfcc[indexamfcc+1][indexacc] - mfcc[indexamfcc-1][indexacc]
-            mfcc[row_n][indexacc] = velocity #putting the velocity in the new row
-    row_n = mfcc.shape[0] #new bottom row
-    mfcc = np.insert(mfcc,row_n,np.zeros(len(mag_frames)),axis=0)
-    mfcc[row_n][0] = file_energy
+    # for indexvmfcc in range (1, tri_cut-2): #1 to 32 (6) #velocity calced and rows added to mfcc
+    #     row_n = mfcc.shape[0]#bottom row
+    #     mfcc = np.insert(mfcc,row_n,np.zeros(len(mag_frames)),axis=0) #add new row of length mag frames
+    #     for indexvel in range (0, len(mfcc[indexvmfcc])-1): #0 to 279 (for example)
+    #         velocity = mfcc[indexvmfcc+1][indexvel] - mfcc[indexvmfcc-1][indexvel]
+    #         mfcc[row_n][indexvel] = velocity #putting the velocity in the new row
+    # for indexamfcc in range (1, tri_cut-4): #1 to 30 (6) #acceleration calced and rows added to mfcc
+    #     row_n = mfcc.shape[0]#new bottom row
+    #     mfcc = np.insert(mfcc,row_n,np.zeros(len(mag_frames)),axis=0) #add new row of length mag frames
+    #     for indexacc in range (0, len(mfcc[indexamfcc])-1): #0 to 279 (for example)
+    #         velocity = mfcc[indexamfcc+1][indexacc] - mfcc[indexamfcc-1][indexacc]
+    #         mfcc[row_n][indexacc] = velocity #putting the velocity in the new row
+    # row_n = mfcc.shape[0] #new bottom row
+    # mfcc = np.insert(mfcc,row_n,np.zeros(len(mag_frames)),axis=0)
+    # mfcc[row_n][0] = file_energy
     
     print(np.shape(mfcc))
     np.save('test', mfcc)    
     
     plt.plot(mfcc[:,5])
-    plt.figure()
-    plt.plot(mfcc[:,2])
     plt.figure()
     #week 3 volecity and accelerations
     #[40,12] from shaping the mfccs, 40 was 8 (number of fbanks) originally but adjusted with acel and vel stuff - called mfcc features
@@ -169,7 +174,7 @@ tri_fbanks = triangularFBank(bins)
 print(np.shape(tri_fbanks)) #10,160
 print(len(tri_fbanks)) #10
 speechFile, fs = sf.read('look_out.wav', dtype='float32')
-file_energy = getEnergy(speechFile)
+#file_energy = getEnergy(speechFile)
 #square every value in the speechfile and sum, then log to get energy
 applyFbankLogDCT(toMagFrames(speechFile))
 
