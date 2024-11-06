@@ -2,9 +2,13 @@
 """
 Created on Sun Oct 27 22:03:02 2024
 
+
+
+#| This file handles the model creation for the DNN used for speech recognition, use name_attempt_distortion2sd.weights.h5 for the most 
+#| accurate weightings
+
 @author: tommy
 """
-import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, InputLayer, MaxPooling2D
 from tensorflow.keras.optimizers import Adam
@@ -18,14 +22,9 @@ import os
 from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
-from sklearn import metrics 
-import glob as glob
-import soundfile as sf 
-import numpy as np
-from main import applyFbankLogDCT, toMagFrames
-import matplotlib.pyplot as plt
-import tensorflow as tf
+from sklearn import metrics
+
+from main import applyFbankLogDCT, toMagFrames, getEnergy
 names = {
     0 : "Muneeb",
     1 : "Zachary",
@@ -50,168 +49,393 @@ names = {
     }
 
 
-### Loading in all audio files found in directory
-for name in names:
-    no = 0
-    print(name)
-    name = names[name]
-    for soundfile in sorted(glob.glob(f'AVPSAMPLESMONO\\{name}\\*.wav')):
-            speechFile, frequency = sf.read(soundfile)
-            #print(speechFile.shape)
-            mag_frames = toMagFrames(speechFile)
-            mfccFile = applyFbankLogDCT(mag_frames)
-            #print(mfccFile.shape)
-            #plt.imshow(mfccFile, origin='lower')
-            #plt.show()
+# Loading in all audio files found in directory
+# for name in names:
+#     no = 0
+#     #print(name)
+#     name = names[name]
+#     for i, soundfile in enumerate(sorted(glob.glob(f'AVPSAMPLESSD\\{name}\\*.wav'))):
+       
+#         #r.reshape(self, shape)
+#         speechFile, frequency = sf.read(soundfile, dtype='float32')
+#         noise, freq = sf.read('noise.wav', dtype='float32')
+#         #print(noise.shape)
+#         print(speechFile.shape)
+#         noise = noise[:speechFile.shape[0]]
+#         #| Adding noise distortion
+#         if no < 15:
+#             noisePower = np.mean(noise**2)
+#             speechPower = np.mean(speechFile**2)
+#             amplification = np.sqrt((speechPower/noisePower)*(10**(-(10/10))))
+#             speechFile = speechFile+(amplification*noise)
+#             # sd.play(speechFile, 16000)
+#             # sd.wait()
+#         if no > 15 and no < 25:
+#             noisePower = np.mean(noise**2)
+#             speechPower = np.mean(speechFile**2)
+#             amplification = np.sqrt((speechPower/noisePower)*(10**(-(20/10))))
+#             speechFile = speechFile+(amplification*noise)
+#             # sd.play(speechFile, 16000)
+#             # sd.wait()
+        
+#         #print(soundfile)
+#         #| Applying preprocessing feature extraction
+#         mag_frames = toMagFrames(speechFile)
+#         file_energy = getEnergy(speechFile)
+#         mfccFile = applyFbankLogDCT(mag_frames, file_energy)
+#         #| Saving mfccs by name and number
+#         np.save(f'mfccs\\{name}\\{name}_{no}', mfccFile)
+#         no = no + 1
 
-            np.save(f'mfccs\\{name}\\{name}{no}.py', mfccFile)
-            no = no + 1
-            #print(soundfile)
+#| Data and label arrays
+data = []
+labels = []
+i = 0
+#| Calculating max length of mfcc file shapes
+max_length1 = 0
+max_length0 = 0
 
-speechFile, fs = sf.read('look_out.wav', dtype='float32')
-a = toMagFrames(speechFile)
-c = applyFbankLogDCT(a)
-#.imshow(c, origin='lower')
+#|
+#| This function is used to calculate the max length for dimension 0 and dimension 1
+for mfcc_file in sorted(glob.glob('mfccs/*/*.npy')):
+    mfcc_data = np.load(mfcc_file)
+    if mfcc_data.shape[0] > max_length0:
+        max_length0 = mfcc_data.shape[0] 
+    if mfcc_data.shape[1] > max_length1:
+        max_length1 = mfcc_data.shape[1]
 
-### TO BE DONE AFTER MFCC CONFIRMED CORRECT
 
-# data = []
-# labels = []
-# i = 0
-# max_length1 = 0
-# max_length0 = 0
-# for mfcc_file in sorted(glob.glob('mfccs/Joey/Joey2*.py.npy')):
-#     mfcc_data = np.load(mfcc_file)
-#     if mfcc_data.shape[0] > max_length0:
-#         max_length0 = mfcc_data.shape[0] 
-#     if mfcc_data.shape[1] > max_length1:
-#         max_length1 = mfcc_data.shape[1]
-# print(max_length1)
-# print(max_length0)
-# for mfcc_file in sorted(glob.glob('mfccs/Joey/Joey2*.py.npy')):
-#     mfcc_data = np.load(mfcc_file)
-#     print(mfcc_data.shape)
-#     print(mfcc_file)
+## For each mfcc_file in mfcc folter
+for mfcc_file in sorted(glob.glob('mfccs/*/*.npy')):
+    ## load the mfcc data
+    mfcc_data = np.load(mfcc_file)
+    #print(mfcc_file)
+    #| padding the mfcc data to ensure that the mfccs are the same dimensions, using the previously calculated 
+    #| max lengths for both dimensions
+    mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
+    #| Appending this to training data
+    data.append(mfcc_data)
+    #print(mfcc_data.shape)
+    #| Getting the file name
+    stemFileName = (Path(os.path.basename(mfcc_file)).stem)
+    #| Splitting the file by _ to get the name rather than number
+    label = stemFileName.split('_')
+    #print(label)
+    #| Appending the name to array of labels to match the classes
+    labels.append(label[0])
+
+## Converting data into a numpy array
+data = np.array(data)
+labels = np.array(labels)
+
+
+classes = []
+
+## Appending all values in defined name dictionary to a classes array
+for val in names.values():
+    classes.append(val)
+
+#|
+#| Normalising each data index by its own highest value, this is to account for differing amplitudes per mfcc
+for val in range(len(data)):
+    data[val] = data[val] / np.max(data[val])
+    
+#|
+#| Using One-Hot encoding, transforming labels into binary vectors for classes
+LE = LabelEncoder()
+LE = LE.fit(classes)
+#print(classes)
+labels = to_categorical(LE.transform(labels))  
+#print(labels)
+
+#| Training and testing split
+X_train, X_tmp, y_train, y_tmp = train_test_split(data, labels, test_size=0.2, random_state=0, stratify=labels, shuffle=True)
+X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5,  random_state=0, stratify=y_tmp, shuffle=True)
+
+#|
+#| Creating the DNN 
+def createDNN():
+    numClasses = 20
+    model = Sequential()
+    #| Shape to match padded mfccs
+    model.add(InputLayer(shape=(max_length0,max_length1,1)))
+    #| 5 layers, 64 kernel size
+    model.add(Conv2D(64,(3,3), activation='relu'))
+    model.add(Conv2D(64, (3,3), activation='relu'))
+    model.add(Conv2D(64, (3,3), activation='relu'))
+    model.add(Conv2D(64, (3,3), activation='relu'))
+    model.add(Conv2D(64, (3,3), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2,2)))
+    model.add(Flatten())
+    model.add(Dense(256))
+    model.add(Activation('relu'))
+    model.add(Dense(numClasses))
+    model.add(Activation('softmax'))
+    return model
+
+#|
+#| Setting epochs and batch sizes
+def train_model():
+    #| 10 epochs provided stable loss decrease and accuracy increases
+    num_epochs = 10
+    num_batch_size = 32
+    #| Compiling each time to avoid building upon previous weightings
+    model = createDNN()
+    #| Slower learning rate, reduced by factors of 10, to account for more layers and to reduce intial model loss
+    model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=Adam(learning_rate=0.001))
+   
+    
+    model.summary()
+    
+    #| Fitting the model with training and validation data
+    training = model.fit(X_train, y_train, validation_data=(X_val,
+    y_val), batch_size=num_batch_size, epochs=num_epochs,
+    verbose=1)
+    #| Saving the weights to remove the need to completely retrain the model
+    model.save_weights('presentation.weights.h5')
+
+    #| Plotting the loss and the accuracy
+    plt.figure()    
+    plt.plot(training.history['accuracy'])
+    plt.plot(training.history['val_accuracy'])
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper left')
+    plt.show()
+    plt.plot(training.history['loss'])
+    plt.plot(training.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper left')
+    plt.show()
     
 
-#     mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
-#     data.append(mfcc_data)
+#| This function is used to create the confusion matrix, based on the test and validation data preditions
+def prediction():
+    model = createDNN()
+    model.load_weights('presentation.weights.h5')   
+    predicted_probs=model.predict(X_test, verbose=0)
+    predicted=np.argmax(predicted_probs,axis=1)
+    #print(predicted.label)
+    actual=np.argmax(y_test,axis=1)
+    accuracy = metrics.accuracy_score(actual, predicted)
+    print(f'Accuracy: {accuracy * 100}%')
+    #| Plotting confusion matrix
+    confusion_matrix = metrics.confusion_matrix(
+        np.argmax(y_test,axis=1), predicted)
+    cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix =
+                                                confusion_matrix)
+    cm_display.plot()
+
+#| This function was created to take live audio recordings and get a prediction based off
+#| the current model weightings
+def test():
+    #| Intialising model
+    model = createDNN()
     
-#     stemFileName = (Path(os.path.basename(mfcc_file)).stem)
-#     label = stemFileName.split('_')
-#     labels.append(label[0])
-
-# data = np.array(data)
-# labels = np.array(labels)
-
-
-# data = data / np.max(data)
-
-# LE = LabelEncoder()
-# classes = ['Joey', 'Noah']
-# LE = LE.fit(classes)
-# labels = to_categorical(LE.transform(labels))                
-# X_train, X_tmp, y_train, y_tmp = train_test_split(data, labels, test_size=0.2, random_state=0)
-# X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, random_state=0)
-
-# def createDNN():
-#     numClasses = 10
-#     model = Sequential()
-#     model.add(InputLayer(input_shape=(40,21,1)))
-#     model.add(Conv2D(128,(3,3), activation='relu'))
-#     model.add(MaxPooling2D(pool_size=(3,3)))
-#     model.add(Activation('relu'))
-#     model.add(Flatten())
-#     model.add(Dense(256))
-#     model.add(Activation('relu'))
-#     model.add(Dense(numClasses))
-#     model.add(Activation('softmax'))
-#     return model
+    #| Two second recording, mono
+    speechFile = sd.rec(2 * 16000, samplerate=16000, channels=1)
+    #| Letting me know if it has reached the time to record
+    print("recording")
+    sd.wait()
+    sd.play(speechFile, 16000)
+    print("Done!")
     
-# num_epochs = [80]
-# num_batch_size = [80]
-# model = createDNN()
-# model.compile(loss='categorical_crossentropy',
-# metrics=['accuracy'], optimizer=Adam(learning_rate=0.01))
-# model.summary()
+    #| Preprocessing the audio file
+    mag_frames = toMagFrames(speechFile)
+    file_energy = getEnergy(speechFile)
+    mfcc_data = applyFbankLogDCT(mag_frames, file_energy)
+    
+    #| Adding padding so that it matches the input shape of the neural network
+    mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
+    
+    #| Creating a numpy array to store sd.rec recorded audio
+    testing_data = []
+    testing_data.append(mfcc_data)
+    testing_data = np.array(testing_data)
+    print(testing_data.shape)
+    #| Normalising each audio recording 
+    for val in range(len(testing_data)):
+        testing_data[val] = testing_data[val] / np.max(testing_data[val])
+      
+    #| Prediction
+    predicted_name = model.predict(data, verbose=0)
+    predicted_id = np.argmax(predicted_name, axis=1)
+    predicted_class = LE.inverse_transform(predicted_id)
+    print(predicted_class)
+    confusion_matrix = metrics.confusion_matrix(
+    np.argmax(y_test,axis=1), predicted_id)
+    cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix =
+    confusion_matrix)
+    cm_display.plot()
 
-# for i in range(len(num_epochs)):
-#     history = model.fit(X_train, y_train, validation_data=(X_val,
-#     y_val), batch_size=num_batch_size[i], epochs=num_epochs[i],
-#     verbose=1)
+def test_brute():
 
-#     model.save_weights('digit_classification.weights.h5')
+    model = createDNN()
+    model.load_weights('name_attempt_distortion2sd.weights.h5')   
+   
+    voice_test = []
+    speechFile = sd.rec(2* 16000, samplerate=16000, channels=1, dtype='float32')
+    
+    print(speechFile.shape)
+ 
+   
+    print("recording")
+    sd.wait()
+    sd.play(speechFile, 16000)
+    print("Done!")
+    #| Normalising speech based on how training data was normalised
+    speechFile = 0.99 * speechFile / max(abs(speechFile))
+    #| Preprocessing 
+    speechFile = speechFile.squeeze()
+    mag_frames = toMagFrames(speechFile)
+    file_energy = getEnergy(speechFile)
+    mfcc_data = applyFbankLogDCT(mag_frames, file_energy)
+    plt.imshow(mfcc_data, origin='lower')
+    plt.show()
+    mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
+    plt.imshow(mfcc_data, origin='lower')
+    voice_test.append(mfcc_data)
+    
+    #print(data[0].shape)
+    #print(voice_test[0].shape)
+    # for data in range(len(test_data)):
+    #     voice_test.append(test_data[data])
+    voice_test = np.array(voice_test)
+    for val in range(len(voice_test)):
+        voice_test[val] = voice_test[val] / np.max(voice_test[val])
+    predicted_name = model.predict(voice_test, verbose=0)
+    predicted_id = np.argmax(predicted_name, axis=1)
+    predicted_class = LE.inverse_transform(predicted_id)
+ 
 
-#     model = createDNN()
-#     model.compile(loss='categorical_crossentropy',
-#     metrics=['accuracy'], optimizer=Adam(learning_rate=0.01))
-#     #model.load_weights('digit_classification.weights.h5')
+    print(f'Predicted name {predicted_class}')
 
-#     plt.plot(history.history['accuracy'])
-#     plt.plot(history.history['val_accuracy'])
-#     plt.title('Model Accuracy')
-#     plt.ylabel('Accuracy')
-#     plt.xlabel('Epoch')
-#     plt.legend(['Train', 'Validation'], loc='upper left')
-#     plt.show()
-#     plt.plot(history.history['loss'])
-#     plt.plot(history.history['val_loss'])
-#     plt.title('Model Loss')
-#     plt.ylabel('Loss')
-#     plt.xlabel('Epoch')
-#     plt.legend(['Train', 'Validation'], loc='upper left')
-#     plt.show()
+#train_model()
+#test()
+test_brute()
+#prediction()
 
-# predicted_probs=model.predict(X_test,verbose=0)
-# predicted=np.argmax(predicted_probs,axis=1)
-# actual=np.argmax(y_test,axis=1)
-# accuracy = metrics.accuracy_score(actual, predicted)
-# print(f'Accuracy: {accuracy * 100}%')
-
-# predicted_prob = model.predict(np.expand_dims(X_test[0,:,:],
-# axis = 0), verbose=0)
-# predicted_id = np.argmax(predicted_prob,axis=1)
-# predicted_class = LE.inverse_transform(predicted_id)
-
-# confusion_matrix = metrics.confusion_matrix(
-# np.argmax(y_test,axis=1), predicted)
-# cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix =
-# confusion_matrix)
-# cm_display.plot()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#| This function was used to record and store names in different directories using sd.rec
+def recording_test():
+    #| For every name in dictionary names
+    for name in names:
+        #| Getting the actual name value by index, would otherwise be a number for the index of names
+        name = names[name] 
+        #| Making new child directory for each name
+        os.mkdir(f'AVPSAMPLESSD\\{name}')
+        #| Used for making a max of 29 samples per name
+        i = 0     
+        while i < 30:
+            #| Debugging to let me know it was ready to say name for the ith time
+            print(f'recording {name} {i}')   
+            speechFile = sd.rec(2* 16000, samplerate=16000, channels=1, dtype='float32')
+            sd.wait()
+            print("done")
+            speechFile = 0.99 * speechFile / max(abs(speechFile))
+            #| The if conditional is primarily used to keep consistency with other samples
+            if i < 10:
+                sf.write(f'AVPSAMPLESSD\\{name}\\{name}00{i}sd.wav', speechFile, 16000)
+            else:
+                sf.write(f'AVPSAMPLESSD\\{name}\\{name}0{i}sd.wav', speechFile, 16000)
+            i = i +1
             
 
 
+def testing_recordings():
+    #| For every name in dictionary names
+    # for name in names:
+    #     #| Getting the actual name value by index, would otherwise be a number for the index of names
+    #     name = names[name] 
+    #     #| Making new child directory for each name
+    #     os.mkdir(f'AVPSAMPLESSD\\TEST\\{name}')
+    #     #| Used for making a max of 29 samples per name
+    #     i = 0     
+    #     while i < 10:
+    #         #| Debugging to let me know it was ready to say name for the ith time
+    #         print(f'recording {name} {i}')   
+    #         speechFile = sd.rec(2* 16000, samplerate=16000, channels=1, dtype='float32')
+    #         sd.wait()
+    #         print("done")
+    #         speechFile = 0.99 * speechFile / max(abs(speechFile))
+    #         #| The if conditional is primarily used to keep consistency with other samples
+    #         if i < 10:
+    #             sf.write(f'AVPSAMPLESSD\\TEST\\{name}\\{name}00{i}sd.wav', speechFile, 16000)
+    #         else:
+    #             sf.write(f'AVPSAMPLESSD\\TEST\\{name}\\{name}0{i}sd.wav', speechFile, 16000)
+    #         i = i +1
             
-            
-# # mfcc_file = np.load('mfccs/Joey/Joey20.py.npy')
-# # mfcc_file2 = np.load('mfccs/Joey/Joey1.py.npy')
-
-
-# # plt.imshow(c.T[:50, :10], origin='lower')
-# # # plt.imshow(mfcc_file2.T[40:], origin='lower')
-# # # plt.show()
-
-
-# # ### Suck my bolloc
-# # #def feedNeuralNetwork():
+    #     no = 0
+    #     for file in sorted(glob.glob(f'AVPSAMPLESSD\\TEST\\{name}\\*.wav')):
+    #         speechFile, frequency = sf.read(file, dtype='float32')
+    #         mag_frames = toMagFrames(speechFile)
+    #         file_energy = getEnergy(speechFile)
+    #         mfccFile = applyFbankLogDCT(mag_frames, file_energy)
+    #         #| Saving mfccs by name and number
+    #         np.save(f'TEST\\{name}_{no}', mfccFile)
+    #         no = no + 1
     
+    test_labels = []
+    test_data = []
+ 
+    for mfcc_file in sorted(glob.glob(f'TEST\\*.npy')):
+        ## load the mfcc data
+        mfcc_data = np.load(mfcc_file)
+        #print(mfcc_file)
+        #| padding the mfcc data to ensure that the mfccs are the same dimensions, using the previously calculated 
+        #| max lengths for both dimensions
+        mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
+        #| Appending this to training data
+        test_data.append(mfcc_data)
+        #print(mfcc_data.shape)
+        #| Getting the file name
+        stemFileName = (Path(os.path.basename(mfcc_file)).stem)
+        #| Splitting the file by _ to get the name rather than number
+        label = stemFileName.split('_')
+        #print(label)
+        #| Appending the name to array of labels to match the classes
+        test_labels.append(label[0])
+    #print(f'testlabels {test_labels}')
+    test_labels = np.array(test_labels)
+    #print(test_labels[0])
+    test_data = np.array(test_data)
+    classes = []
+    for data in range(len(test_data)):
+        test_data[data] = test_data[data] / np.max(test_data[data])
+    
+    for val in names.values():
+        classes.append(val)
+        #print(classes)
+    
+    
+    LE = LabelEncoder()
+    #print(classes)
+    LE = LE.fit(classes)
+    test_labels = to_categorical(LE.transform(test_labels))
+
+    #| Creating model for predictions
+    model = createDNN()
+    model.load_weights('name_attempt_distortion2sd.weights.h5')   
+    predictions = model.predict(test_data, verbose=0)
+    predicted_labels = np.argmax(predictions, axis=1)
+    predicted_class = LE.inverse_transform(predicted_labels)
+    #| Trying to get the actual labels following the same process of predicted labels transformation
+    actual_labels = np.argmax(test_labels, axis=1)
+    for prediction in range(len(predicted_labels)):
+        #| Getting the actual label and the predicted class 
+        predicted_class = LE.inverse_transform(predicted_labels)
+        actual_label = LE.inverse_transform(actual_labels)
+
+        print(f'prediction: {predicted_class[prediction]}, actual: {actual_label[prediction]}')
+        
+    accuracy = metrics.accuracy_score(actual_labels, predicted_labels)
+    print(f'Accuracy: {accuracy * 100}%')
+    
+    confusion_matrix = metrics.confusion_matrix(
+        np.argmax(test_labels,axis=1), predicted_labels)
+    cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix =
+                                                confusion_matrix)
+    cm_display.plot()
+#testing_recordings()
