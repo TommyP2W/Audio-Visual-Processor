@@ -23,7 +23,7 @@ from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
-
+import cv2
 from main import applyFbankLogDCT, toMagFrames, getEnergy
 names = {
     0 : "Muneeb",
@@ -49,44 +49,50 @@ names = {
     }
 
 
-# Loading in all audio files found in directory
-# for name in names:
-#     no = 0
-#     #print(name)
-#     name = names[name]
-#     for i, soundfile in enumerate(sorted(glob.glob(f'AVPSAMPLESSD\\{name}\\*.wav'))):
+#|Loading in all audio files found in directory
+for name in names:
+    no = 0
+    #print(name)
+    name = names[name]
+    for i, soundfile in enumerate(sorted(glob.glob(f'AVPSAMPLESSD\\{name}\\*.wav'))):
        
-#         #r.reshape(self, shape)
-#         speechFile, frequency = sf.read(soundfile, dtype='float32')
-#         noise, freq = sf.read('noise.wav', dtype='float32')
-#         #print(noise.shape)
-#         print(speechFile.shape)
-#         noise = noise[:speechFile.shape[0]]
-#         #| Adding noise distortion
-#         if no < 15:
-#             noisePower = np.mean(noise**2)
-#             speechPower = np.mean(speechFile**2)
-#             amplification = np.sqrt((speechPower/noisePower)*(10**(-(10/10))))
-#             speechFile = speechFile+(amplification*noise)
-#             # sd.play(speechFile, 16000)
-#             # sd.wait()
-#         if no > 15 and no < 25:
-#             noisePower = np.mean(noise**2)
-#             speechPower = np.mean(speechFile**2)
-#             amplification = np.sqrt((speechPower/noisePower)*(10**(-(20/10))))
-#             speechFile = speechFile+(amplification*noise)
-#             # sd.play(speechFile, 16000)
-#             # sd.wait()
+        #r.reshape(self, shape)
+        speechFile, frequency = sf.read(soundfile, dtype='float32')
+        noise, freq = sf.read('noise.wav', dtype='float32')
+        #print(noise.shape)
+        print(speechFile.shape)
+        noise = noise[:speechFile.shape[0]]
+        #| Adding noise distortion
+        if no < 15:
+            noisePower = np.mean(noise**2)
+            speechPower = np.mean(speechFile**2)
+            amplification = np.sqrt((speechPower/noisePower)*(10**(-(10/10))))
+            speechFile = speechFile+(amplification*noise)
+            # sd.play(speechFile, 16000)
+            # sd.wait()
+        if no > 15 and no < 25:
+            noisePower = np.mean(noise**2)
+            speechPower = np.mean(speechFile**2)
+            amplification = np.sqrt((speechPower/noisePower)*(10**(-(20/10))))
+            speechFile = speechFile+(amplification*noise)
+            # sd.play(speechFile, 16000)
+            # sd.wait()
         
-#         #print(soundfile)
-#         #| Applying preprocessing feature extraction
-#         mag_frames = toMagFrames(speechFile)
-#         file_energy = getEnergy(speechFile)
-#         mfccFile = applyFbankLogDCT(mag_frames, file_energy)
-#         #| Saving mfccs by name and number
-#         np.save(f'mfccs\\{name}\\{name}_{no}', mfccFile)
-#         no = no + 1
-
+        #print(soundfile)
+        #| Applying preprocessing feature extraction
+        mag_frames = toMagFrames(speechFile)
+        file_energy = getEnergy(speechFile)
+        mfccFile = applyFbankLogDCT(mag_frames, file_energy)
+        #| Saving mfccs by name and number
+        np.save(f'mfccs\\{name}\\{name}_{no}', mfccFile)
+        no = no + 1
+#
+# Skeleton for the visual processing
+#
+def processVisualData():
+    for name in names:
+        pass
+    
 #| Data and label arrays
 data = []
 labels = []
@@ -160,7 +166,7 @@ def createDNN():
     #| Shape to match padded mfccs
     model.add(InputLayer(shape=(max_length0,max_length1,1)))
     #| 5 layers, 64 kernel size
-    model.add(Conv2D(64,(3,3), activation='relu'))
+    #model.add(Conv2D(64,(3,3), activation='relu'))
     model.add(Conv2D(64, (3,3), activation='relu'))
     model.add(Conv2D(64, (3,3), activation='relu'))
     model.add(Conv2D(64, (3,3), activation='relu'))
@@ -192,7 +198,7 @@ def train_model():
     y_val), batch_size=num_batch_size, epochs=num_epochs,
     verbose=1)
     #| Saving the weights to remove the need to completely retrain the model
-    model.save_weights('presentation.weights.h5')
+    model.save_weights('woutpitch.weights.h5')
 
     #| Plotting the loss and the accuracy
     plt.figure()    
@@ -215,7 +221,7 @@ def train_model():
 #| This function is used to create the confusion matrix, based on the test and validation data preditions
 def prediction():
     model = createDNN()
-    model.load_weights('presentation.weights.h5')   
+    model.load_weights('woutpitch.weights.h5')   
     predicted_probs=model.predict(X_test, verbose=0)
     predicted=np.argmax(predicted_probs,axis=1)
     #print(predicted.label)
@@ -274,7 +280,7 @@ def test():
 def test_brute():
 
     model = createDNN()
-    model.load_weights('name_attempt_distortion2sd.weights.h5')   
+    model.load_weights('new.weights.h5')   
    
     voice_test = []
     speechFile = sd.rec(2* 16000, samplerate=16000, channels=1, dtype='float32')
@@ -284,7 +290,7 @@ def test_brute():
    
     print("recording")
     sd.wait()
-    sd.play(speechFile, 16000)
+    #sd.play(speechFile, 16000)
     print("Done!")
     #| Normalising speech based on how training data was normalised
     speechFile = 0.99 * speechFile / max(abs(speechFile))
@@ -346,9 +352,9 @@ def recording_test():
 
 def testing_recordings():
     #| For every name in dictionary names
-    # for name in names:
+    for name in names:
     #     #| Getting the actual name value by index, would otherwise be a number for the index of names
-    #     name = names[name] 
+        name = names[name] 
     #     #| Making new child directory for each name
     #     os.mkdir(f'AVPSAMPLESSD\\TEST\\{name}')
     #     #| Used for making a max of 29 samples per name
@@ -367,15 +373,34 @@ def testing_recordings():
     #             sf.write(f'AVPSAMPLESSD\\TEST\\{name}\\{name}0{i}sd.wav', speechFile, 16000)
     #         i = i +1
             
-    #     no = 0
-    #     for file in sorted(glob.glob(f'AVPSAMPLESSD\\TEST\\{name}\\*.wav')):
-    #         speechFile, frequency = sf.read(file, dtype='float32')
-    #         mag_frames = toMagFrames(speechFile)
-    #         file_energy = getEnergy(speechFile)
-    #         mfccFile = applyFbankLogDCT(mag_frames, file_energy)
-    #         #| Saving mfccs by name and number
-    #         np.save(f'TEST\\{name}_{no}', mfccFile)
-    #         no = no + 1
+        no = 0
+        for file in sorted(glob.glob(f'AVPSAMPLESSD\\TEST\\{name}\\*.wav')):
+            speechFile, frequency = sf.read(file, dtype='float32')
+ 
+            noise, freq = sf.read('noise.wav', dtype='float32')
+        #print(noise.shape)
+            print(speechFile.shape)
+            noise = noise[:speechFile.shape[0]]   
+ 
+            if no < 15:
+                noisePower = np.mean(noise**2)
+                speechPower = np.mean(speechFile**2)
+                amplification = np.sqrt((speechPower/noisePower)*(10**(-(20/10))))
+                speechFile = speechFile+(amplification*noise)
+                noisePower1 = np.mean((amplification*noise)**2)
+                print(noisePower1)
+                # sd.play(speechFile, 16000)
+                # sd.wait()
+                # sd.play(speechFile, 16000)
+                # sd.wait()
+    
+            mag_frames = toMagFrames(speechFile)
+            file_energy = getEnergy(speechFile)
+            mfccFile = applyFbankLogDCT(mag_frames, file_energy)
+            
+            #| Saving mfccs by name and number
+            np.save(f'TEST\\{name}_{no}', mfccFile)
+            no = no + 1
     
     test_labels = []
     test_data = []
