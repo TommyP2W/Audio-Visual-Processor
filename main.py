@@ -121,7 +121,7 @@ def applyFbankLogDCT(mag_frames, file_energy):
         # plt.imshow(mfcc, origin='lower')
         # # plt.colorbar()
         # plt.show()
-    plt.imshow(mfcc, origin="lower")
+        
     # for indexpitch in range (math.floor((2/3) * (mfcc.shape[0]-1)),mfcc.shape[0]): #takes off last 33% of dct- pitch
     #     mfcc[indexpitch] = 0
         
