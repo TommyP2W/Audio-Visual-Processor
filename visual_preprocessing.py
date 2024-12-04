@@ -3,11 +3,12 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.ndimage as sci_img
-from scipy.fftpack import dct
+from scipy.fftpack import dct, dctn, idctn
 
 
 def load_image():
     img = cv2.imread(r"C:\Users\tommy\Pictures\Camera Roll\Screenshot 2024-12-01 154350.png")
+    print(img)
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     return gray_img
 
@@ -41,7 +42,7 @@ def detect_face(gray_img):
     w = face[0,2]
     h = face[0,3]
     # Draw the face detected
-    face_detected = gray_img[int(y + h) / 2:y + h, x:x + w]  # Correct slicing
+    face_detected = gray_img[int((y + h) / 2):y + h, x:x + w]  # Correct slicing
 
     plt.imshow(face_detected, cmap='gray')
     plt.show()
@@ -141,12 +142,14 @@ def dct8by8(detected_mouth):
             block_arr[row:row+8,col:col+8] = resized_mouth[row:row+8, col:col+8]
             # print(block.shape)
             # dct the image, the image is two-dimensional  so needs to be done twice, not sure how yet.
-            dct_temp = dct(dct(block_arr[row:row+8,col:col+8].T))
+            dct_temp = dctn(block_arr[row:row+8, col:col+8], type=2, norm="ortho")
+            dct_temp = idctn(dct_temp, type=2, norm="ortho")
+
 
             # dct_temp = idct(dct_temp)
 
             # Save the dct into the dct array
-            dct_arr[row:row+8, col:col+8] = dct_temp.T
+            dct_arr[row:row+8, col:col+8] = dct_temp
 
             print(dct_arr[0][0])
     plt.imshow(dct_arr)
@@ -159,13 +162,14 @@ def dct8by8(detected_mouth):
 # plt.show()
 
 
-img = load_image()
-faces = detect_face(img)
-detected_mouth = detect_mouth(img)
+imag = load_image()
+faces = detect_face(imag)
+detected_mouth = detect_mouth(imag)
 plt.imshow(detected_mouth)
 plt.show()
 plt.imshow(faces)
 plt.show()
+dct8by8(detected_mouth)
 
 kernel = np.ones((2, 2), np.uint8)
 dilated = cv2.dilate(detected_mouth, kernel, iterations=2)
