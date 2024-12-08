@@ -45,8 +45,8 @@ def detect_face(gray_img):
     # Draw the face detected
     face_detected = gray_img[int((y + h) / 2):y + h, x:x + w]  # Correct slicing
 
-    plt.imshow(face_detected, cmap='gray')
-    plt.show()
+    # plt.imshow(face_detected, cmap='gray')
+    # plt.show()
     return face_detected
 # print(gray_img.shape)
 # x = gray_img.flatten()
@@ -85,7 +85,7 @@ def detect_mouth(face_detected):
     return mouth_detected
 
 
-def get_frame():
+def get_frame(video):
     """
       #| Description:
       #|
@@ -93,19 +93,26 @@ def get_frame():
       #| frame detected.
       """
     # Loading in a testing sample
-    cap = cv2.VideoCapture(r"C:\Users\tommy\Pictures\Camera Roll\VisualClips\Amelia\Amelia014.mp4")
-
-    print(cap)
+    cap = cv2.VideoCapture(video[1])
+    frames_arr = []
     # While the capture object still has frames to process
     while cap.isOpened():
+        print("hello")
         # Process a frame
         ret, frame = cap.read()
-        # Convert to grayscale
-        grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # grey = frame[:,:,2]
-        # grey = grey[:,:,2]
-        plt.imshow(grey)
-        plt.show()
+        if frame is not None:
+            print("frame detected")
+            # Convert to grayscale
+            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frames_arr.append(grey)
+        else:
+            break
+
+    return frames_arr
+    # for frame in frames_arr:
+    #     plt.imshow(frame, cmap='gray')
+    #     plt.show()
+
 
 
 def dct8by8(detected_mouth):
@@ -144,7 +151,7 @@ def dct8by8(detected_mouth):
             # print(block.shape)
             # dct the image, the image is two-dimensional  so needs to be done twice, not sure how yet.
             dct_temp = dctn(block_arr[row:row+8, col:col+8], type=2, norm="ortho")
-            dct_temp = idctn(dct_temp, type=2, norm="ortho")
+            #dct_temp = idctn(dct_temp, type=2, norm="ortho")
 
 
             # dct_temp = idct(dct_temp)
@@ -152,9 +159,10 @@ def dct8by8(detected_mouth):
             # Save the dct into the dct array
             dct_arr[row:row+8, col:col+8] = dct_temp
 
-            print(dct_arr[0][0])
-    plt.imshow(dct_arr)
-    plt.show()
+            #print(dct_arr[0][0])
+    # plt.imshow(dct_arr)
+    # plt.show()
+    #print(dct_arr.shape)
     return dct_arr
 
 # blockydct = dct8by8()
@@ -162,7 +170,7 @@ def dct8by8(detected_mouth):
 # plt.imshow(cvd, origin='lower')
 # plt.show()
 
-
+#get_frame()
 imag = load_image()
 faces = detect_face(imag)
 detected_mouth = detect_mouth(imag)

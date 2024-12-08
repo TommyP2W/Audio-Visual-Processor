@@ -25,6 +25,7 @@ from sklearn.model_selection import train_test_split
 from sklearn import metrics
 import cv2
 from main import applyFbankLogDCT, toMagFrames, getEnergy
+from visual_preprocessing import detect_face, dct8by8, detect_mouth, get_frame
 names = {
     0 : "Muneeb",
     1 : "Zachary",
@@ -49,50 +50,67 @@ names = {
     }
 
 
-#|Loading in all audio files found in directory
-for name in names:
-    no = 0
-    #print(name)
-    name = names[name]
-    for i, soundfile in enumerate(sorted(glob.glob(f'AVPSAMPLESSD\\{name}\\*.wav'))):
-       
-        #r.reshape(self, shape)
-        speechFile, frequency = sf.read(soundfile, dtype='float32')
-        noise, freq = sf.read('noise.wav', dtype='float32')
-        #print(noise.shape)
-        print(speechFile.shape)
-        noise = noise[:speechFile.shape[0]]
-        #| Adding noise distortion
-        if no < 15:
-            noisePower = np.mean(noise**2)
-            speechPower = np.mean(speechFile**2)
-            amplification = np.sqrt((speechPower/noisePower)*(10**(-(10/10))))
-            speechFile = speechFile+(amplification*noise)
-            # sd.play(speechFile, 16000)
-            # sd.wait()
-        if no > 15 and no < 25:
-            noisePower = np.mean(noise**2)
-            speechPower = np.mean(speechFile**2)
-            amplification = np.sqrt((speechPower/noisePower)*(10**(-(20/10))))
-            speechFile = speechFile+(amplification*noise)
-            # sd.play(speechFile, 16000)
-            # sd.wait()
-        
-        #print(soundfile)
-        #| Applying preprocessing feature extraction
-        mag_frames = toMagFrames(speechFile)
-        file_energy = getEnergy(speechFile)
-        mfccFile = applyFbankLogDCT(mag_frames, file_energy)
-        #| Saving mfccs by name and number
-        np.save(f'mfccs\\{name}\\{name}_{no}', mfccFile)
-        no = no + 1
+# #|Loading in all audio files found in directory
+# for name in names:
+#     no = 0
+#     #print(name)
+#     name = names[name]
+#     for i, soundfile in enumerate(sorted(glob.glob(f'AVPSAMPLESSD\\{name}\\*.wav'))):
 #
+#         #r.reshape(self, shape)
+#         speechFile, frequency = sf.read(soundfile, dtype='float32')
+#         noise, freq = sf.read('noise.wav', dtype='float32')
+#         #print(noise.shape)
+#         print(speechFile.shape)
+#         noise = noise[:speechFile.shape[0]]
+#         #| Adding noise distortion
+#         if no < 15:
+#             noisePower = np.mean(noise**2)
+#             speechPower = np.mean(speechFile**2)
+#             amplification = np.sqrt((speechPower/noisePower)*(10**(-(10/10))))
+#             speechFile = speechFile+(amplification*noise)
+#             # sd.play(speechFile, 16000)
+#             # sd.wait()
+#         if no > 15 and no < 25:
+#             noisePower = np.mean(noise**2)
+#             speechPower = np.mean(speechFile**2)
+#             amplification = np.sqrt((speechPower/noisePower)*(10**(-(20/10))))
+#             speechFile = speechFile+(amplification*noise)
+#             # sd.play(speechFile, 16000)
+#             # sd.wait()
+#
+#         #print(soundfile)
+#         #| Applying preprocessing feature extraction
+#         mag_frames = toMagFrames(speechFile)
+#         file_energy = getEnergy(speechFile)
+#         mfccFile = applyFbankLogDCT(mag_frames, file_energy)
+#         #| Saving mfccs by name and number
+#         np.save(f'mfccs\\{name}\\{name}_{no}', mfccFile)
+#         no = no + 1
+# #
 # Skeleton for the visual processing
 #
 def processVisualData():
-    for name in names:
-        pass
-    
+    # for name in names:
+    no = 0
+    #     name = names[name]
+    for vid in enumerate(sorted(glob.glob(r'C:\Users\tommy\Desktop\AudiovisualLabs\AVPSum\Christopher\*.mp4'))):
+        print(vid)
+        frames = get_frame(vid)
+        vid_coefficients = []
+        for frame in frames:
+            faces = detect_face(frame)
+            detected_mouth = detect_mouth(faces)
+            c = dct8by8(detected_mouth)
+            vid_coefficients.append(c)
+            print(c.shape)
+
+        np.save(f'Visualmfccs\\Christopher\\Christopher_{no}', vid_coefficients)
+        no += 1
+        # a = np.array(vid_coefficients)
+        # print(a.shape)
+
+processVisualData()
 #| Data and label arrays
 data = []
 labels = []
@@ -321,7 +339,7 @@ def test_brute():
 
 #train_model()
 #test()
-test_brute()
+#test_brute()
 #prediction()
 
 #| This function was used to record and store names in different directories using sd.rec
