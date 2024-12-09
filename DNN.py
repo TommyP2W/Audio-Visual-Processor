@@ -9,8 +9,9 @@ Created on Sun Oct 27 22:03:02 2024
 
 @author: tommy
 """
+import keras
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, InputLayer, MaxPooling2D
+from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, InputLayer, MaxPooling2D, Dropout
 from tensorflow.keras.optimizers import Adam
 import soundfile as sf
 import sounddevice as sd
@@ -21,11 +22,14 @@ from pathlib import Path
 import os
 from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn import metrics
 import cv2
 from main import applyFbankLogDCT, toMagFrames, getEnergy
 from visual_preprocessing import detect_face, dct8by8, detect_mouth, get_frame
+
+from scikeras.wrappers import KerasClassifier
+import tensorflow as tf
 names = {
     0 : "Muneeb",
     1 : "Zachary",
@@ -91,66 +95,116 @@ names = {
 # Skeleton for the visual processing
 #
 def processVisualData():
-    # for name in names:
-    no = 0
-    #     name = names[name]
-    for vid in enumerate(sorted(glob.glob(r'C:\Users\tommy\Desktop\AudiovisualLabs\AVPSum\Christopher\*.mp4'))):
-        print(vid)
-        frames = get_frame(vid)
-        vid_coefficients = []
-        for frame in frames:
-            faces = detect_face(frame)
-            detected_mouth = detect_mouth(faces)
-            c = dct8by8(detected_mouth)
-            vid_coefficients.append(c)
-            print(c.shape)
+    for name in names:
+        no = 0
+        name = names[name]
+        for vid in enumerate(sorted(glob.glob(rf'C:\Users\tommy\Desktop\AudiovisualLabs\AVPSum\VisualClips\{name}\*.mp4'))):
+            print(vid)
+            frames = get_frame(vid)
+            vid_coefficients = []
+            for frame in frames:
+                faces = detect_face(frame)
+                detected_mouth = detect_mouth(faces)
+                if detected_mouth is None:
+                    break
+                c = dct8by8(detected_mouth)
+                vid_coefficients.append(c)
+                #print(c.shape)
+            if os.path.exists(f'Visualmfccs\\{name}') is False:
+                os.mkdir(f'Visualmfccs\\{name}')
 
-        np.save(f'Visualmfccs\\Christopher\\Christopher_{no}', vid_coefficients)
-        no += 1
-        # a = np.array(vid_coefficients)
-        # print(a.shape)
+            np.save(f'Visualmfccs\\{name}\\{name}_{no}', vid_coefficients)
+            no += 1
+            # a = np.array(vid_coefficients)
+            # print(a.shape)
 
-processVisualData()
+#processVisualData()
 #| Data and label arrays
-data = []
-labels = []
+
+
 i = 0
 #| Calculating max length of mfcc file shapes
-max_length1 = 0
-max_length0 = 0
-
+max_visual2 = 0
+max_visual1 = 0
+max_visual0 = 0
+max_audio1 = 0
+max_audio0 = 0
 #|
 #| This function is used to calculate the max length for dimension 0 and dimension 1
-for mfcc_file in sorted(glob.glob('mfccs/*/*.npy')):
-    mfcc_data = np.load(mfcc_file)
-    if mfcc_data.shape[0] > max_length0:
-        max_length0 = mfcc_data.shape[0] 
-    if mfcc_data.shape[1] > max_length1:
-        max_length1 = mfcc_data.shape[1]
 
-
-## For each mfcc_file in mfcc folter
-for mfcc_file in sorted(glob.glob('mfccs/*/*.npy')):
-    ## load the mfcc data
+for mfcc_file in sorted(glob.glob('Visualmfccs/*/*.npy')):
     mfcc_data = np.load(mfcc_file)
-    #print(mfcc_file)
-    #| padding the mfcc data to ensure that the mfccs are the same dimensions, using the previously calculated 
-    #| max lengths for both dimensions
-    mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
-    #| Appending this to training data
-    data.append(mfcc_data)
     #print(mfcc_data.shape)
-    #| Getting the file name
-    stemFileName = (Path(os.path.basename(mfcc_file)).stem)
-    #| Splitting the file by _ to get the name rather than number
-    label = stemFileName.split('_')
-    #print(label)
-    #| Appending the name to array of labels to match the classes
-    labels.append(label[0])
+    if len(mfcc_data) != 0:
+        if mfcc_data.shape[0] > max_visual0:
+            max_visual0 = mfcc_data.shape[0]
+        if mfcc_data.shape[1] > max_visual1:
+            max_visual1 = mfcc_data.shape[1]
+        if mfcc_data.shape[2] > max_visual2:
+            max_visual2 = mfcc_data.shape[2]
+for mfcc_file in sorted(glob.glob('mfccs/*/*.npy')):
+    mfcc_data = np.load(mfcc_file)
+    if mfcc_data.shape[0] > max_audio0:
+        max_audio0 = mfcc_data.shape[0]
+    if mfcc_data.shape[1] > max_audio1:
+        max_audio1 = mfcc_data.shape[1]
+
+
+# #
+# for mfcc_file in sorted(glob.glob('Visualmfccs/*/*.npy')):
+#     mfcc_data = np.load(mfcc_file)
+#     if len(mfcc_data) != 0:
+#         if mfcc_data.shape[0] > max_length0:
+#             max_length0 = mfcc_data.shape[0]
+## For each mfcc_file in mfcc folter
+def visual_npy():
+    visual_arr = []
+    visual_labels = []
+    for visual_file in sorted(glob.glob('Visualmfccs/*/*.npy')):
+        ## load the mfcc data
+        visual_data = np.load(visual_file)
+        if len(visual_data) != 0:
+            #print(mfcc_file)
+            #| padding the mfcc data to ensure that the mfccs are the same dimensions, using the previously calculated
+            #| max lengths for both dimensions
+            mfcc_data = np.pad(visual_data, ((0,max_visual0-visual_data.shape[0]),
+                                             (0, max_visual1-visual_data.shape[1]), (0,max_visual2-visual_data.shape[2])))
+            #print(mfcc_data.shape)
+            #mfcc_data = np.pad(mfcc_data, (0, max_length0 - mfcc_data.shape[0]))
+            #| Appending this to training data
+            visual_arr.append(mfcc_data)
+            #print(mfcc_data.shape)
+            #| Getting the file name
+            stemFileName = (Path(os.path.basename(visual_file)).stem)
+            #| Splitting the file by _ to get the name rather than number
+            label = stemFileName.split('_')
+            #print(label)
+            #| Appending the name to array of labels to match the classes
+            visual_labels.append(label[0])
+    visual_arr = np.array(visual_arr)
+    for val in range(len(visual_arr)):
+        visual_arr[val] = visual_arr[val] / np.max(visual_arr[val])
+    visual_labels = np.array(visual_labels)
+    return visual_arr, visual_labels
+
+def audio_npy():
+    audio_arr = []
+    audio_labels = []
+    for audio_file in sorted(glob.glob('mfccs/*/*.npy')):
+        audio_data = np.load(audio_file)
+        mfcc_data = np.pad(audio_data, ((0, max_audio0-audio_data.shape[0]), (0,max_audio1-audio_data.shape[1])))
+        audio_arr.append(mfcc_data)
+        stemFileName = (Path(os.path.basename(audio_file)).stem)
+        label = stemFileName.split('_')
+        audio_labels.append(label[0])
+    audio_arr = np.array(audio_arr)
+    audio_labels = np.array(audio_labels)
+    for val in range(len(audio_arr)):
+        audio_arr[val] = audio_arr[val] / np.max(audio_arr[val])
+    return audio_arr, audio_labels
 
 ## Converting data into a numpy array
-data = np.array(data)
-labels = np.array(labels)
+
 
 
 classes = []
@@ -161,34 +215,50 @@ for val in names.values():
 
 #|
 #| Normalising each data index by its own highest value, this is to account for differing amplitudes per mfcc
-for val in range(len(data)):
-    data[val] = data[val] / np.max(data[val])
+
+
     
 #|
 #| Using One-Hot encoding, transforming labels into binary vectors for classes
-LE = LabelEncoder()
-LE = LE.fit(classes)
+vis_LE = LabelEncoder()
+vis_LE = vis_LE.fit(classes)
+aud_LE = LabelEncoder()
+aud_LE = aud_LE.fit(classes)
+visual_data, visual_labels = visual_npy()
+visual_labels = to_categorical(vis_LE.transform(visual_labels))
+vis_x_train, vis_x_tmp, vis_y_train, vis_y_tmp = train_test_split(visual_data, visual_labels, test_size=0.2, random_state=0, stratify=visual_labels,
+                                                  shuffle=True)
+vis_x_val, vis_x_test, vis_y_val, vis_y_test = train_test_split(vis_x_tmp, vis_y_tmp, test_size=0.5, random_state=0, stratify=vis_y_tmp,
+                                                shuffle=True)
+audio_data, audio_labels = audio_npy()
+audio_labels = to_categorical(aud_LE.transform(audio_labels))
+aud_x_train, aud_x_tmp, aud_y_train, aud_y_tmp = train_test_split(audio_data, audio_labels, test_size=0.2, random_state=0, stratify=audio_labels,
+                                                  shuffle=True)
+aud_x_val, aud_x_test, aud_y_val, aud_y_test = train_test_split(aud_x_tmp, aud_y_tmp, test_size=0.5, random_state=0, stratify=aud_y_tmp,
+                                                shuffle=True)
+
+
 #print(classes)
-labels = to_categorical(LE.transform(labels))  
+
 #print(labels)
-
+#print(data.shape)
 #| Training and testing split
-X_train, X_tmp, y_train, y_tmp = train_test_split(data, labels, test_size=0.2, random_state=0, stratify=labels, shuffle=True)
-X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5,  random_state=0, stratify=y_tmp, shuffle=True)
 
+#print(y_test.shape)
 #|
 #| Creating the DNN 
-def createDNN():
+def createDNN(input_params):
     numClasses = 20
     model = Sequential()
     #| Shape to match padded mfccs
-    model.add(InputLayer(shape=(max_length0,max_length1,1)))
+    model.add(InputLayer(shape=(input_params)))
     #| 5 layers, 64 kernel size
     #model.add(Conv2D(64,(3,3), activation='relu'))
     model.add(Conv2D(64, (3,3), activation='relu'))
     model.add(Conv2D(64, (3,3), activation='relu'))
     model.add(Conv2D(64, (3,3), activation='relu'))
     model.add(Conv2D(64, (3,3), activation='relu'))
+    model.add(Dropout(0.5))
     model.add(MaxPooling2D(pool_size=(2,2)))
     model.add(Flatten())
     model.add(Dense(256))
@@ -204,19 +274,20 @@ def train_model():
     num_epochs = 10
     num_batch_size = 32
     #| Compiling each time to avoid building upon previous weightings
-    model = createDNN()
+    model = createDNN((max_audio0,max_audio1,1))
     #| Slower learning rate, reduced by factors of 10, to account for more layers and to reduce intial model loss
     model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=Adam(learning_rate=0.001))
    
     
     model.summary()
-    
+
+    #callback = keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
     #| Fitting the model with training and validation data
-    training = model.fit(X_train, y_train, validation_data=(X_val,
-    y_val), batch_size=num_batch_size, epochs=num_epochs,
+    training = model.fit(aud_x_train, aud_y_train, validation_data=(aud_x_val,
+    aud_y_val), batch_size=num_batch_size, epochs=num_epochs,
     verbose=1)
     #| Saving the weights to remove the need to completely retrain the model
-    model.save_weights('woutpitch.weights.h5')
+    model.save_weights('new_aud.weights.h5')
 
     #| Plotting the loss and the accuracy
     plt.figure()    
@@ -239,26 +310,38 @@ def train_model():
 #| This function is used to create the confusion matrix, based on the test and validation data preditions
 def prediction():
     model = createDNN()
-    model.load_weights('woutpitch.weights.h5')   
-    predicted_probs=model.predict(X_test, verbose=0)
+    model.load_weights('visual.weights.h5')
+
+    #print(data.shape)
+    predicted_probs=model.predict(vis_x_test, verbose=0)
     predicted=np.argmax(predicted_probs,axis=1)
     #print(predicted.label)
-    actual=np.argmax(y_test,axis=1)
+    actual=np.argmax(vis_y_test,axis=1)
+    predicted_class = vis_LE.inverse_transform(actual)
     accuracy = metrics.accuracy_score(actual, predicted)
     print(f'Accuracy: {accuracy * 100}%')
     #| Plotting confusion matrix
     confusion_matrix = metrics.confusion_matrix(
-        np.argmax(y_test,axis=1), predicted)
+        np.argmax(vis_y_test,axis=1), predicted)
     cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix =
                                                 confusion_matrix)
     cm_display.plot()
+    plt.show()
 
 #| This function was created to take live audio recordings and get a prediction based off
 #| the current model weightings
 def test():
     #| Intialising model
     model = createDNN()
-    
+
+    audio_data, audio_labels = visual_npy()
+    labels = to_categorical(aud_LE.transform(audio_labels))
+    X_train, X_tmp, y_train, y_tmp = train_test_split(audio_labels, audio_labels, test_size=0.2, random_state=0,
+                                                      stratify=labels,
+                                                      shuffle=True)
+    X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, random_state=0, stratify=y_tmp,
+                                                    shuffle=True)
+
     #| Two second recording, mono
     speechFile = sd.rec(2 * 16000, samplerate=16000, channels=1)
     #| Letting me know if it has reached the time to record
@@ -273,7 +356,7 @@ def test():
     mfcc_data = applyFbankLogDCT(mag_frames, file_energy)
     
     #| Adding padding so that it matches the input shape of the neural network
-    mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
+    mfcc_data = np.pad(mfcc_data, ((0,max_audio0-mfcc_data.shape[0]), (0, max_audio1-mfcc_data.shape[1])))
     
     #| Creating a numpy array to store sd.rec recorded audio
     testing_data = []
@@ -285,9 +368,9 @@ def test():
         testing_data[val] = testing_data[val] / np.max(testing_data[val])
       
     #| Prediction
-    predicted_name = model.predict(data, verbose=0)
+    predicted_name = model.predict(audio_data, verbose=0)
     predicted_id = np.argmax(predicted_name, axis=1)
-    predicted_class = LE.inverse_transform(predicted_id)
+    predicted_class = aud_LE.inverse_transform(predicted_id)
     print(predicted_class)
     confusion_matrix = metrics.confusion_matrix(
     np.argmax(y_test,axis=1), predicted_id)
@@ -319,7 +402,7 @@ def test_brute():
     mfcc_data = applyFbankLogDCT(mag_frames, file_energy)
     plt.imshow(mfcc_data, origin='lower')
     plt.show()
-    mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
+    mfcc_data = np.pad(mfcc_data, ((0,max_audio0-mfcc_data.shape[0]), (0, max_audio1-mfcc_data.shape[1])))
     plt.imshow(mfcc_data, origin='lower')
     voice_test.append(mfcc_data)
     
@@ -332,7 +415,7 @@ def test_brute():
         voice_test[val] = voice_test[val] / np.max(voice_test[val])
     predicted_name = model.predict(voice_test, verbose=0)
     predicted_id = np.argmax(predicted_name, axis=1)
-    predicted_class = LE.inverse_transform(predicted_id)
+    predicted_class = aud_LE.inverse_transform(predicted_id)
  
 
     print(f'Predicted name {predicted_class}')
@@ -340,6 +423,8 @@ def test_brute():
 #train_model()
 #test()
 #test_brute()
+
+
 #prediction()
 
 #| This function was used to record and store names in different directories using sd.rec
@@ -429,7 +514,7 @@ def testing_recordings():
         #print(mfcc_file)
         #| padding the mfcc data to ensure that the mfccs are the same dimensions, using the previously calculated 
         #| max lengths for both dimensions
-        mfcc_data = np.pad(mfcc_data, ((0,max_length0-mfcc_data.shape[0]), (0, max_length1-mfcc_data.shape[1]))) 
+        mfcc_data = np.pad(mfcc_data, ((0,max_audio0-mfcc_data.shape[0]), (0, max_audio1-mfcc_data.shape[1])))
         #| Appending this to training data
         test_data.append(mfcc_data)
         #print(mfcc_data.shape)
@@ -482,3 +567,98 @@ def testing_recordings():
                                                 confusion_matrix)
     cm_display.plot()
 #testing_recordings()
+
+def test_sus_model(vid, max_length0):
+    model = createDNN()
+    model.load_weights('visual.weights.h5')
+    cap = cv2.VideoCapture(r"C:\Users\tommy\Desktop\AudiovisualLabs\AVPSum\AVPSAV\Amelia\Amelia005.mp4")
+    frames_arr = []
+    # While the capture object still has frames to process
+    while cap.isOpened():
+        print("hello")
+        # Process a frame
+        ret, frame = cap.read()
+        if frame is not None:
+            print("frame detected")
+            # Convert to grayscale
+            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frames_arr.append(grey)
+        else:
+            break
+    test = []
+    mfcc_data = []
+    for frame in frames_arr:
+        faces = detect_face(frame)
+        detected_mouth = detect_mouth(faces)
+        if detected_mouth is None:
+            break
+        print(detected_mouth)
+        c = dct8by8(detected_mouth)
+        mfcc_data.append(c)
+
+    mfcc_data = np.array(mfcc_data)
+    if mfcc_data.shape[0] > max_length0:
+        max_length0 = mfcc_data.shape[0]
+    print(mfcc_data.shape)
+    vid_coefficients = np.pad(mfcc_data, ((0,max_visual0-mfcc_data.shape[0]), (0, max_visual1-mfcc_data.shape[1]), (0, max_visual2-mfcc_data.shape[2])))
+    print(f'mfcc shape {vid_coefficients.shape}')
+    print(max_length0)
+    # for i in range(len(vid_coefficients)):
+    #     if vid_coefficients[i] > 0:
+    #         vid_coefficients[i] = vid_coefficients[i] / np.max(vid_coefficients[i])
+
+    test.append(vid_coefficients)
+    test = np.array(test)
+    print(test.shape)
+    predicted_name = model.predict(test, verbose=0)
+    predicted_id = np.argmax(predicted_name, axis=1)
+    predicted_class = vis_LE.inverse_transform(predicted_id)
+
+    print(f'Predicted name {predicted_class}')
+
+# def optimise():
+#     param_grid = {
+#         'batch_size': [32, 64, 128],
+#         'epochs': [10, 15,20],
+#         'learning_rate': [0.001,0.01,0.1,0.0001],
+#         'units': [32,64,128],
+#         'optimizer': ['Adam']
+#     }
+#     print(X_train.shape)
+#     a = createDNN()
+#     a.compile(loss='categorical_crossentropy', metrics=['accuracy'])
+#
+#     model = KerasClassifier(model=a)
+#     print(model.get_params().keys())
+#     gs = GridSearchCV(estimator=model, param_grid=param_grid, cv=2)
+#     gs = gs.fit(X_train, y_train)
+#     print(f'Best params: {gs.best_params_}')
+#     print(f'Best score: {gs.best_score_}')
+
+def avpLI():
+    visual_network = createDNN((max_visual0,max_visual1,max_visual2))
+    audio_network = createDNN(((max_audio0,max_audio1,1)))
+    visual_network.load_weights('visual.weights.h5')
+    audio_network.load_weights('new_aud.weights.h5')
+
+    vis_predictions = visual_network.predict(vis_x_test, verbose=0)
+    vis_predicted_labels = np.argmax(vis_predictions, axis=1)
+    vis_predicted_class = vis_LE.inverse_transform(vis_predicted_labels)
+    vis_true_labels = np.argmax(vis_y_test, axis=1)
+    vis_true_labels = vis_LE.inverse_transform(vis_true_labels)
+    print(vis_true_labels)
+    print(f'{vis_predicted_class} \n')
+
+    aud_predictions = audio_network.predict(aud_x_test, verbose=0)
+    aud_predicted_labels = np.argmax(aud_predictions, axis=1)
+    aud_predicted_class = aud_LE.inverse_transform(aud_predicted_labels)
+    aud_true_labels = np.argmax(aud_y_test, axis=1)
+    aud_true_labels = aud_LE.inverse_transform(aud_true_labels)
+    print(f'{aud_true_labels} \n')
+    #print(aud_y_test)
+    print(aud_predicted_class)
+vid = r'C:\Users\tommy\Desktop\AudiovisualLabs\AVPSum\VisualClips\Emilija005.mp4'
+#optimise()
+#train_model()
+avpLI()
+# test_sus_model(vid, max_length0)

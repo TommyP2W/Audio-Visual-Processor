@@ -9,7 +9,9 @@ from scipy.fftpack import dct, dctn, idctn
 def load_image():
     img = cv2.imread(r"C:\Users\tommy\Pictures\Camera Roll\Screenshot 2024-12-01 154350.png")
     print(img)
-    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray_img = img[:, :, 0]
+    plt.imshow(gray_img)
+    plt.show()
     return gray_img
 
 
@@ -35,15 +37,22 @@ def detect_face(gray_img):
 
     # Detect the face from the gray_img
     face = face_classifier.detectMultiScale(gray_img, scaleFactor=1.15,
-                                        minNeighbors=5, minSize=(40, 40))
+                                        minNeighbors=12, minSize=(20, 20))
+    #print(face)
+    if len(face) == 0:
+        print("No face detected")
+        plt.imshow(gray_img)
+        plt.show()
+        return None
     # Get bounding coords
-    x = face[0,0]
-    y = face[0,1]
-    w = face[0,2]
-    h = face[0,3]
+    x = face[0][0]
+    y = face[0][1]
+    w = face[0][2]
+    h = face[0][3]
     # Draw the face detected
-    face_detected = gray_img[int((y + h) / 2):y + h, x:x + w]  # Correct slicing
-
+    face_detected = gray_img[int(y + h / 2):y + h, x:x + w]  # Correct slicing
+    # plt.imshow(face_detected)
+    # plt.show()
     # plt.imshow(face_detected, cmap='gray')
     # plt.show()
     return face_detected
@@ -73,14 +82,19 @@ def detect_mouth(face_detected):
     # Initialise the mouth classifier
     mouth_classifier = cv2.CascadeClassifier('haarcascade_mcs_mouth.xml')
     # Detect the mouth from the classifier
-    mouth = mouth_classifier.detectMultiScale(face_detected, scaleFactor=1.1, minNeighbors=10, minSize=(30, 30))
+    mouth = mouth_classifier.detectMultiScale(face_detected, scaleFactor=1.1, minNeighbors=7, minSize=(40, 40))
     # Get the mouth coords
-    mx = mouth[0, 0]
-    my = mouth[0, 1]
-    mw = mouth[0, 2]
-    mh = mouth[0, 3]
-    # Draw the mouth
+
+    if len(mouth) == 0:
+        return None
+    #print(mouth)
+    mx = mouth[0][0]
+    my = mouth[0][1]
+    mw = mouth[0][2]
+    mh = mouth[0][3]
+    # # Draw the mouth
     mouth_detected = face_detected[my:my + mh, mx:mx + mw]
+
     return mouth_detected
 
 
@@ -96,14 +110,16 @@ def get_frame(video):
     frames_arr = []
     # While the capture object still has frames to process
     while cap.isOpened():
-        print("hello")
+        #print("hello")
         # Process a frame
         ret, frame = cap.read()
         if frame is not None:
-            print("frame detected")
+            #print("frame detected")
             # Convert to grayscale
-            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frames_arr.append(grey)
+            gray_img = frame[:, :, 0]
+            # plt.imshow(gray_img, cmap='gray')
+            # plt.show()
+            frames_arr.append(gray_img)
         else:
             break
 
@@ -161,7 +177,9 @@ def dct8by8(detected_mouth):
             #print(dct_arr[0][0])
     # plt.imshow(dct_arr)
     # plt.show()
-    #print(dct_arr.shape)
+    # plt.imshow(dct_arr)
+    # plt.show()
+    print(dct_arr.shape)
     return dct_arr
 
 # blockydct = dct8by8()
@@ -170,27 +188,27 @@ def dct8by8(detected_mouth):
 # plt.show()
 
 #get_frame()
-imag = load_image()
-faces = detect_face(imag)
-detected_mouth = detect_mouth(imag)
-plt.imshow(detected_mouth)
-plt.show()
-plt.imshow(faces)
-plt.show()
-dct8by8(detected_mouth)
-
-kernel = np.ones((2, 2), np.uint8)
-dilated = cv2.dilate(detected_mouth, kernel, iterations=2)
-_, thresh = cv2.threshold(detected_mouth, 85, 255, cv2.THRESH_TOZERO)
-area_of_lips = np.sum(thresh == 0)
-
-# print(area_of_lips)
-
-contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-a = cv2.drawContours(thresh, contours, -1, (255, 0, 0), 1)
-
-gaussian_filter = sci_img.gaussian_laplace(detected_mouth, 1)
-plt.imshow(thresh)
-# plt.imshow(dilated)
-
-plt.show()
+# imag = load_image()
+# faces = detect_face(imag)
+# detected_mouth = detect_mouth(imag)
+#plt.imshow(detected_mouth)
+#plt.show()
+#plt.imshow(faces)
+#plt.show()
+#dct8by8(detected_mouth)
+#
+# kernel = np.ones((2, 2), np.uint8)
+# dilated = cv2.dilate(detected_mouth, kernel, iterations=2)
+# _, thresh = cv2.threshold(detected_mouth, 85, 255, cv2.THRESH_TOZERO)
+# area_of_lips = np.sum(thresh == 0)
+#
+# # print(area_of_lips)
+#
+# contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+# a = cv2.drawContours(thresh, contours, -1, (255, 0, 0), 1)
+#
+# gaussian_filter = sci_img.gaussian_laplace(detected_mouth, 1)
+# #plt.imshow(thresh)
+# # plt.imshow(dilated)
+#
+# plt.show()
