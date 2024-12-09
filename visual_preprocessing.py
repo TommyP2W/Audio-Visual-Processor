@@ -106,7 +106,7 @@ def get_frame(video):
       #| frame detected.
       """
     # Loading in a testing sample
-    cap = cv2.VideoCapture(video[1])
+    cap = cv2.VideoCapture(video)
     frames_arr = []
     # While the capture object still has frames to process
     while cap.isOpened():
@@ -181,6 +181,23 @@ def dct8by8(detected_mouth):
     # plt.show()
     print(dct_arr.shape)
     return dct_arr
+
+def bitmap_smooth(detected_mouth):
+    _, thresh = cv2.threshold(detected_mouth, 85, 255, cv2.THRESH_BINARY)
+    thresh = ~thresh
+    label_structure = [[0,1,0],
+                       [1,1,1],
+                       [0,1,0]]
+    labeled_img, num_features = sci_img.label(thresh, label_structure)
+    small_removed_img = np.zeros_like(thresh)
+    for index in range(1, num_features + 1):
+        component_mask = (labeled_img == index)
+        if np.sum(component_mask) >= 50:
+            small_removed_img[component_mask] = 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6,6))
+    smoothed_img = cv2.morphologyEx(small_removed_img, cv2.MORPH_CLOSE, kernel)
+    return smoothed_img
+
 
 # blockydct = dct8by8()
 # print(blockydct)

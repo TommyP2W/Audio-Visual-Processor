@@ -102,8 +102,8 @@ def applyFbankLogDCT(mag_frames, file_energy):
             #print("b fine:", b)
             #c[indexfbank][indexmag] = b
             matmulled = np.matmul(mag_frames[indexmag],tri_fbanks[indexfbank])
-            #if (matmulled == 0):
-            #    matmulled = 0.000001 #if you log 0 you get -infinity which will break the dnn
+            if (matmulled == 0):
+                matmulled = 0.000001 #if you log 0 you get -infinity which will break the dnn
             mfcc[indexfbank-1][indexmag] = math.log10(matmulled)
             #dct is meant to be done via column
             #mfcc[indexfbank-1] = spy.fft.dct(mfcc[indexfbank-1])

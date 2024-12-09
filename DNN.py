@@ -10,6 +10,9 @@ Created on Sun Oct 27 22:03:02 2024
 @author: tommy
 """
 import keras
+import librosa
+import ffmpeg as fm
+from scipy.interpolate import CubicSpline
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, InputLayer, MaxPooling2D, Dropout
 from tensorflow.keras.optimizers import Adam
@@ -26,10 +29,13 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn import metrics
 import cv2
 from main import applyFbankLogDCT, toMagFrames, getEnergy
-from visual_preprocessing import detect_face, dct8by8, detect_mouth, get_frame
-
+from visual_preprocessing import detect_face, dct8by8, detect_mouth, get_frame, bitmap_smooth
+import mediapipe as mp
 from scikeras.wrappers import KerasClassifier
 import tensorflow as tf
+import moviepy
+from moviepy.video.io.VideoFileClip import VideoFileClip
+
 names = {
     0 : "Muneeb",
     1 : "Zachary",
@@ -115,13 +121,113 @@ def processVisualData():
 
             np.save(f'Visualmfccs\\{name}\\{name}_{no}', vid_coefficients)
             no += 1
-            # a = np.array(vid_coefficients)
-            # print(a.shape)
 
-#processVisualData()
-#| Data and label arrays
+def visual_feature_interp(visual_feat, audio_feat):
+    """
+    Return visual features matching the number of frames of the supplied audio
+    feature. The time dimension must be the first dim of each feature
+    matrix; uses the cubic spline interpolation method - adapted from Matlab.
+
+    Args:
+        visual_feat: the input visual features size: (visual_num_frames, visual_feature_len)
+        audio_feat: the input audio features size: (audio_num_frames, audio_feature_len)
+
+    Returns:
+        visual_feat_interp: visual features that match the number of frames of the audio feature
+    """
+
+    audio_timesteps = audio_feat.shape[0]
+
+    # Initialize an array to store interpolated visual features
+    visual_feat_interp = np.zeros((audio_timesteps, visual_feat.shape[0]))
+
+    for feature_dim in range(visual_feat.shape[0]):
+        cubicSpline = CubicSpline(np.arange(visual_feat.shape[0]), visual_feat[:, feature_dim])
+        visual_feat_interp[:, feature_dim] = cubicSpline(np.linspace(0, visual_feat.shape[0] - 1, audio_timesteps))
+
+    return visual_feat_interp
 
 
+def processMP4Data():
+    for name in names:
+        vid_no = 1
+        audio_no = 1
+        visual_no = 0
+        name = names[name]
+        for vid in enumerate(sorted(glob.glob(f'AVPSAV\\{name}\\*.mp4'))):
+            # goes through each vid and extracts the audio as .wav
+            if vid_no != 10:
+                input_file = VideoFileClip(f"AVPSAV\\{name}\\{name}00{vid_no}.mp4")
+                audio1 = input_file.audio
+
+                audio1.write_audiofile(f"VisualWav\\{name}\\{name}00{vid_no}.wav", fps=16000)
+                # Extract the audio and save it as an MP3 file
+                if os.path.exists(f'VisualWav\\{name}') is False:
+                    os.mkdir(f'VisualWav\\{name}')
+                #audio1.output(f"VisualWav\\{name}\\{vid}00{vid_no}.wav", acodec='wav').run()
+                vid_no += 1
+            else:
+                input_file = VideoFileClip(f"AVPSAV\\{name}\\{name}0{vid_no}.mp4")
+                audio1 = input_file.audio
+
+                audio1.write_audiofile(f"VisualWav\\{name}\\{name}0{vid_no}.wav", fps=16000)
+                vid_no += 1
+
+        for i, soundfile in enumerate(sorted(glob.glob(f"VisualWav\\{name}\\*.wav"))):
+            speechFile_16k, frequency = sf.read(soundfile, dtype='float32')
+            speechFile_16k = speechFile_16k.mean(axis=1)
+            print(speechFile_16k.shape)
+
+            # frequency should be 48k here, resample to 16k
+            #speechFile_16k = librosa.resample(speechFile_48k, orig_sr=frequency, target_sr=16000)
+
+            # | Applying preprocessing feature extraction
+            mag_frames = toMagFrames(speechFile_16k)
+            file_energy = getEnergy(speechFile_16k)
+            mfccFile = applyFbankLogDCT(mag_frames, file_energy)
+
+            # this is where we need to do the visual stuff so that we can append it to the npy file before saving
+            # hopefully this then grabs the frames of the relevant mp4
+            if audio_no != 10:
+                vis_frames = get_frame(f'AVPSAV\\{name}\\{name}00{audio_no}.mp4')
+                if len(vis_frames) == 0:
+                    print("not found")
+                vis_frames = np.array(vis_frames)
+                print(vis_frames.shape)
+            else:
+                vis_frames = get_frame(f'AVPSAV\\{name}\\{name}0{audio_no}.mp4')
+                vis_frames = np.array(vis_frames)
+                print(vis_frames.shape)
+            # this returns an interpolated array where the visual frames line up to the mccFiles (audios)
+            print(mfccFile.shape)
+            interp_vis = visual_feature_interp(vis_frames, mfccFile)
+            # the frames in interp_vis are the ones we want to make into bitmaps and dct
+
+            vis_coefficients = []
+            vis_bitmaps = []
+            for frame in interp_vis:
+                faces = detect_face(frame)
+                detected_mouth = detect_mouth(faces)
+                c = dct8by8(detected_mouth)
+                c2 = bitmap_smooth(detected_mouth)
+                vis_coefficients.append(c)
+                vis_bitmaps.append(c2)
+
+            row_n = mfccFile.shape[0]  # bottom row
+            mfccFile = np.insert(mfccFile, row_n, vis_coefficients, axis=0)
+            row_n = mfccFile.shape[0]  # new bottom row
+            mfccFile = np.insert(mfccFile, row_n, vis_bitmaps, axis=0)
+            # so now we have our audio mfcc array with 2 extra rows: 1 with the dcts and 1 with bitmaps
+
+            # | Saving mfccs by name and number
+            if os.path.exists(f'VisualAudMfcc\\{name}') is False:
+                os.mkdir(f'VisualAudMfcc\\{name}')
+            np.save(f'VisualAudMfcc\\{name}\\{name}_{audio_no}', mfccFile)
+            audio_no += 1
+
+
+#rocessVisualData()
+processMP4Data()
 i = 0
 #| Calculating max length of mfcc file shapes
 max_visual2 = 0
@@ -660,5 +766,5 @@ def avpLI():
 vid = r'C:\Users\tommy\Desktop\AudiovisualLabs\AVPSum\VisualClips\Emilija005.mp4'
 #optimise()
 #train_model()
-avpLI()
+#avpLI()
 # test_sus_model(vid, max_length0)
