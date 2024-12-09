@@ -8,7 +8,8 @@ from scipy.fftpack import dct, dctn, idctn
 
 def load_image():
     img = cv2.imread(r"C:\Users\scott\Pictures\Screenshot 2024-11-30 170746.png")
-    print(img)
+    
+    print(img.name)
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray_img = img[:,:,2]
     return gray_img
@@ -182,35 +183,27 @@ dct8by8(detected_mouth)
 
 kernel = np.ones((2, 2), np.uint8)
 dilated = cv2.dilate(detected_mouth, kernel, iterations=2)
-_, thresh = cv2.threshold(detected_mouth, 85, 255, cv2.THRESH_BINARY)
-thresh = ~thresh
-label_structure = [[0,1,0],
-                   [1,1,1],
-                   [0,1,0]]
-labeled_img, num_features = sci_img.label(thresh, label_structure)
-small_removed_img = np.zeros_like(thresh)
-for index in range(1, num_features + 1):
-    component_mask = (labeled_img == index)
-    if np.sum(component_mask) >= 50:
-        small_removed_img[component_mask] = 1
-kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
-smoothed_img = cv2.morphologyEx(small_removed_img, cv2.MORPH_CLOSE, kernel)
+
+def bitmap_smooth(detected_mouth):
+    _, thresh = cv2.threshold(detected_mouth, 85, 255, cv2.THRESH_BINARY)
+    thresh = ~thresh
+    label_structure = [[0,1,0],
+                       [1,1,1],
+                       [0,1,0]]
+    labeled_img, num_features = sci_img.label(thresh, label_structure)
+    small_removed_img = np.zeros_like(thresh)
+    for index in range(1, num_features + 1):
+        component_mask = (labeled_img == index)
+        if np.sum(component_mask) >= 50:
+            small_removed_img[component_mask] = 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6,6))
+    smoothed_img = cv2.morphologyEx(small_removed_img, cv2.MORPH_CLOSE, kernel)
+    return smoothed_img
 
 
         
 
-area_of_lips = np.sum(smoothed_img == 1)
 
-# print(area_of_lips)
-
-contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-a = cv2.drawContours(thresh, contours, -1, (255, 0, 0), 1)
-
-gaussian_filter = sci_img.gaussian_laplace(detected_mouth, 1)
-
-plt.imshow(thresh)
-plt.imshow(small_removed_img)
-plt.imshow(smoothed_img)
 
 
 plt.show()

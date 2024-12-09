@@ -19,13 +19,16 @@ import numpy as np
 import glob
 from pathlib import Path
 import os
+from scipy.interpolate import CubicSpline
+import librosa
 from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 import cv2
+from audio_extract import extract_audio
 from main import applyFbankLogDCT, toMagFrames, getEnergy
-from visual_preprocessing import detect_face, dct8by8, detect_mouth, get_frame
+from visual_preprocessing import detect_face, dct8by8, detect_mouth, get_frame, bitmap_smooth
 names = {
     0 : "Muneeb",
     1 : "Zachary",
@@ -90,6 +93,8 @@ names = {
 # #
 # Skeleton for the visual processing
 #
+
+
 def processVisualData():
     # for name in names:
     no = 0
@@ -109,7 +114,56 @@ def processVisualData():
         no += 1
         # a = np.array(vid_coefficients)
         # print(a.shape)
+        
+def processMP4Data():
+    for name in names:
+        vid_no = 0
+        audio_no = 0
+        visual_no = 0
+        name = names[name]
+        for vid in enumerate(sorted(glob.glob(f'C:\\Users\\scott\\Documents\\Unreal Projects\\AVPSum\\mp4s\\{name}\\*.mp4'))):
+            #goes through each vid and extracts the audio as .wav
+            extract_audio(input_path=f"mp4s\\{vid}\\{vid}_{vid_no}.mp4", output_path=f"wavs\\{vid}\\{vid}_{vid_no}.wav", format= "wav")
+            vid_no += 1
+            
+        for i, soundfile in enumerate(sorted(glob.glob(f"wavs\\{name}\\*.wav"))):
+            speechFile_48k, frequency = sf.read(soundfile, dtype='float32')
+            #frequency should be 48k here, resample to 16k
+            speechFile_16k = librosa.resample(speechFile_48k, orig_sr= frequency, target_sr=16000)
+        
+            #| Applying preprocessing feature extraction
+            mag_frames = toMagFrames(speechFile_16k)
+            file_energy = getEnergy(speechFile_16k)
+            mfccFile = applyFbankLogDCT(mag_frames, file_energy)
+            
+            #this is where we need to do the visual stuff so that we can append it to the npy file before saving
+            #hopefully this then grabs the frames of the relevant mp4
+            vis_frames = get_frame(f'\\mp4s\\{name}\\{name}_{audio_no}.mp4')
+            #this returns an interpolated array where the visual frames line up to the mccFiles (audios)
+            interp_vis = visual_feature_interp(mfccFile, vis_frames)
+            #the frames in interp_vis are the ones we want to make into bitmaps and dct
 
+            vis_coefficients = []
+            vis_bitmaps = []
+            for frame in interp_vis:
+                faces = detect_face(frame)
+                detected_mouth = detect_mouth(faces)
+                c = dct8by8(detected_mouth)
+                c2 = bitmap_smooth(detected_mouth)
+                vis_coefficients.append(c)
+                vis_bitmaps.append(c2)
+                
+            row_n = mfccFile.shape[0] #bottom row
+            mfccFile = np.insert(mfccFile,row_n,vis_coefficients,axis=0)
+            row_n = mfccFile.shape[0] #new bottom row
+            mfccFile = np.insert(mfccFile,row_n,vis_bitmaps,axis=0)
+            #so now we have our audio mfcc array with 2 extra rows: 1 with the dcts and 1 with bitmaps
+            
+            
+            #| Saving mfccs by name and number
+            np.save(f'mfccs\\{name}\\{name}_{audio_no}', mfccFile)
+            audio_no += 1
+        
 processVisualData()
 #| Data and label arrays
 data = []
@@ -294,6 +348,31 @@ def test():
     cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix =
     confusion_matrix)
     cm_display.plot()
+    
+def visual_feature_interp(visual_feat, audio_feat):
+    """
+    Return visual features matching the number of frames of the supplied audio
+    feature. The time dimension must be the first dim of each feature
+    matrix; uses the cubic spline interpolation method - adapted from Matlab.
+
+    Args:
+        visual_feat: the input visual features size: (visual_num_frames, visual_feature_len)
+        audio_feat: the input audio features size: (audio_num_frames, audio_feature_len)
+
+    Returns:
+        visual_feat_interp: visual features that match the number of frames of the audio feature
+    """
+
+    audio_timesteps = audio_feat.shape[0]
+
+    # Initialize an array to store interpolated visual features
+    visual_feat_interp = np.zeros((audio_timesteps, visual_feat.shape[1]))
+
+    for feature_dim in range(visual_feat.shape[1]):
+        cubicSpline = CubicSpline(np.arange(visual_feat.shape[0]), visual_feat[:, feature_dim])
+        visual_feat_interp[:, feature_dim] = cubicSpline(np.linspace(0, visual_feat.shape[0] - 1, audio_timesteps))
+
+    return visual_feat_interp
 
 def test_brute():
 
