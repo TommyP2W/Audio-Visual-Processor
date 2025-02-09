@@ -11,7 +11,7 @@
 #### Bitmask mouth detection
 <table>
   <tr>
-    <th><img src="image/Morphological2.gif" alt="AVP Morphological operations" width="400"></th>
-    <th><img src="image/NotMorpho.gif" alt="AVP Morphological operations" width="400"></th>
+    <th><img src="image/Morphological2.gif" alt="AVP Morphological operations" width="350"></th>
+    <th><img src="image/NotMorpho.gif" alt="AVP Morphological operations" width="350"></th>
   </tr>
 </table>
