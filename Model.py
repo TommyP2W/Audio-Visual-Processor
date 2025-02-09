@@ -1,3 +1,13 @@
+"""
+Created on Sun Feb 09 17:17 2025
+
+This file contains multiple functions that are involved in the creation, predicting and splitting of data inputted into
+the CNN model.
+
+@author: tommy
+"""
+
+
 from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, InputLayer, MaxPooling2D, Dropout
@@ -11,7 +21,6 @@ from feature_processing import names
 
 
 def train_test_split_method(data, labels):
-
     """
     Helper function for creating training and testing splits.
 
@@ -23,7 +32,7 @@ def train_test_split_method(data, labels):
         data_x_train, data_y_train: Contains training data for fitting the network.
         data_x_test, data_y_test: Contains testing data for making predictions.
         data_x_val, data_y_val: Contains validation data.
-        data_LE: Label encoder.
+        data_le: Label encoder.
     """
 
     classes = []
@@ -32,20 +41,20 @@ def train_test_split_method(data, labels):
     for val in names.values():
         classes.append(val)
 
+    data_le = LabelEncoder()
+    data_le = data_le.fit(classes)
+    categorical_labels = to_categorical(data_le.transform(labels))
 
-    combined_LE = LabelEncoder()
-    combined_LE = combined_LE.fit(classes)
-    categorical_labels = to_categorical(combined_LE.transform(labels))
-   
+    data_x_train, data_x_tmp, data_y_train, data_y_tmp = train_test_split(data, categorical_labels, test_size=0.2,
+                                                                          random_state=0,
+                                                                          stratify=categorical_labels,
+                                                                          shuffle=True)
+    data_x_val, data_x_test, data_y_val, data_y_test = train_test_split(data_x_tmp, data_y_tmp, test_size=0.5,
+                                                                        random_state=0,
+                                                                        stratify=data_y_tmp,
+                                                                        shuffle=True)
 
-    com_x_train, com_x_tmp, com_y_train, com_y_tmp = train_test_split(data, categorical_labels, test_size=0.2,
-                                                                    random_state=0, stratify=categorical_labels,
-                                                                    shuffle=True)
-    com_x_val, com_x_test, com_y_val, com_y_test = train_test_split(com_x_tmp, com_y_tmp, test_size=0.5, random_state=0,
-                                                                    stratify=com_y_tmp,
-                                                                    shuffle=True)
-   
-    return com_x_train, com_y_train, com_x_test, com_y_test ,com_x_val, com_y_val, combined_LE
+    return data_x_train, data_y_train, data_x_test, data_y_test, data_x_val, data_y_val, data_le
 
 
 def li_test_integ(vis_y_test, vis_x_test, aud_y_test, aud_x_test):
@@ -81,8 +90,8 @@ def li_test_integ(vis_y_test, vis_x_test, aud_y_test, aud_x_test):
 
     return aud_test_data, vis_test_data, aud_test_labels, vis_test_labels
 
-def createDNN(input_params):
 
+def create_cnn(input_params):
     """
     Helper function for creating CNN network.
 
@@ -93,31 +102,28 @@ def createDNN(input_params):
         model: Created network. 
     """
 
-
-    numClasses = 20
+    num_classes = 20
     model = Sequential()
-    model.add(InputLayer(shape=(input_params)))
+    model.add(InputLayer(shape=input_params))
 
-    model.add(Conv2D(64, (3,3), activation='relu'))
-    model.add(Conv2D(64, (3,3), activation='relu'))
-    model.add(Conv2D(64, (3,3), activation='relu'))
-    model.add(Conv2D(64, (3,3), activation='relu'))
+    model.add(Conv2D(64, (3, 3), activation='relu'))
+    model.add(Conv2D(64, (3, 3), activation='relu'))
+    model.add(Conv2D(64, (3, 3), activation='relu'))
+    model.add(Conv2D(64, (3, 3), activation='relu'))
 
     model.add(Dropout(0.5))
-    model.add(MaxPooling2D(pool_size=(2,2)))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Flatten())
 
     model.add(Dense(256))
     model.add(Activation('relu'))
-    model.add(Dense(numClasses))
+    model.add(Dense(num_classes))
     model.add(Activation('softmax'))
 
     return model
 
 
-
-def train_model(option_critic,dimensions, data, labels):
-
+def train_model(option_critic, dimensions, data, labels):
     """
     Function for compiling and training model. Provides plot after completion detailing loss and accuracy across epoch.
     Args:
@@ -129,35 +135,35 @@ def train_model(option_critic,dimensions, data, labels):
     Returns:
         This function returns nothing.
     """
-    
+
     num_epochs = 25
     num_batch_size = 32
-   
+
     if option_critic == 'visual':
-        model = createDNN((dimensions[0], 
+        model = create_cnn((dimensions[0],
                            dimensions[1],
                            dimensions[2]))
-    else: 
-        model = createDNN((dimensions[0], dimensions[1]))
-    
+    else:
+        model = create_cnn((dimensions[0], dimensions[1]))
+
     data_x_train, data_y_train, data_x_test, data_y_test, data_x_val, data_y_val = train_test_split(data, labels)
 
-    # Slower learning rate, reduced by factors of 10, to account for more layers and to reduce intial model loss
+    # Slower learning rate, reduced by factors of 10, to account for more layers and to reduce initial model loss
     model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=Adam(learning_rate=0.001))
-   
-    
+
     model.summary()
 
     # Fitting the model with training and validation data
     training = model.fit(data_x_train, data_y_train, validation_data=(data_x_val,
-    data_y_val), batch_size=num_batch_size, epochs=num_epochs,
-    verbose=1)
-   
+                                                                      data_y_val), batch_size=num_batch_size,
+                         epochs=num_epochs,
+                         verbose=1)
+
     # Saving the weights to remove the need to completely retrain the model
     model.save_weights('bitmap.weights.h5')
 
     # Plotting the loss and the accuracy
-    plt.figure()    
+    plt.figure()
     plt.plot(training.history['accuracy'])
     plt.plot(training.history['val_accuracy'])
     plt.title('Model Accuracy')
@@ -172,50 +178,49 @@ def train_model(option_critic,dimensions, data, labels):
     plt.xlabel('Epoch')
     plt.legend(['Train', 'Validation'], loc='upper left')
     plt.show()
-    
-def prediction(option_critic, dimensions, data_x_test, data_y_test, combined_LE):
 
+
+def prediction(option_critic, dimensions, data_x_test, data_y_test, label_encoder):
     """
-    Function to make predictions on a given testing set. Produces confusion matrix to provide visual representation of performance.
+    Function to make predictions on a given testing set. Produces confusion matrix to provide visual representation of
+    performance.
+
     Args:
         option_critic: String containing option for the type of visual feature.
         dimensions: Array containing integers to determine input layer size.
         data_x_test: Array containing normalised and padded testing data.
         data_y_test: Array containing labels for input testing data.
+        label_encoder: Label encoder object.
 
     Returns:
         This function returns nothing.
     """
 
     if option_critic == 'visual':
-        model = createDNN((dimensions[0], 
+        model = create_cnn((dimensions[0],
                            dimensions[1],
                            dimensions[2]))
-    else: 
-        model = createDNN((dimensions[0], dimensions[1]))
-    
+    else:
+        model = create_cnn((dimensions[0], dimensions[1]))
+
     model.load_weights('visual.weights.h5')
 
-    predicted_probs=model.predict(data_x_test, verbose=0)
-    predicted=np.argmax(predicted_probs,axis=1)
+    predicted_probs = model.predict(data_x_test, verbose=0)
+    predicted = np.argmax(predicted_probs, axis=1)
 
-    actual=np.argmax(data_y_test,axis=1)
-    actual_class = combined_LE.inverse_transform(actual)
-    predicted_class = combined_LE.inverse_transform(predicted)
+    actual = np.argmax(data_y_test, axis=1)
+    actual_class = label_encoder.inverse_transform(actual)
+    predicted_class = label_encoder.inverse_transform(predicted)
     accuracy = metrics.accuracy_score(actual, predicted)
-    
+
     print(f'Accuracy: {accuracy * 100}%')
 
     for name in range(len(predicted_class)):
         print(f'Actual class: {actual_class[name]}, Predicted class: {predicted_class[name]}')
 
-    #| Plotting confusion matrix
+    # Plotting confusion matrix
     confusion_matrix = metrics.confusion_matrix(
-        np.argmax(data_y_test,axis=1), predicted)
-    cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix =
-                                                confusion_matrix)
+        np.argmax(data_y_test, axis=1), predicted)
+    cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix=confusion_matrix)
     cm_display.plot()
     plt.show()
-#prediction()
-#| This function was created to take live audio recordings and get a prediction based off
-#| the current model weightings

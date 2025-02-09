@@ -1,6 +1,15 @@
+"""
+Created on Sun Feb 09 17:17 2025
+
+This file contains various test harnesses for testing the model. Including recording your own voice to get a
+classification, or inputting a video file into the model.
+
+@author: tommy
+"""
+
+
 from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
 import soundfile as sf
 import sounddevice as sd
@@ -13,7 +22,7 @@ from sklearn import metrics
 from feature_processing import names, audio_npy, visual_npy, get_max_dimensionality
 from main import toMagFrames, getEnergy, applyFbankLogDCT
 from visual_preprocessing import dct8by8, detect_face, detect_mouth
-from Model import createDNN, train_test_split_method, li_test_integ
+from Model import create_cnn, train_test_split_method, li_test_integ
 
 
 def test_voice(dimensions):
@@ -28,7 +37,7 @@ def test_voice(dimensions):
             Returns Nothing.
      """
 
-    model = createDNN((dimensions[0], dimensions[1], 1))
+    model = create_cnn((dimensions[0], dimensions[1], 1))
     model.load_weights('new.weights.h5')   
    
     voice_test = []
@@ -176,7 +185,7 @@ def testing_recordings(dimensions):
     test_labels = to_categorical(label_encoder.transform(test_labels))
 
     # Loading in weights and creating DNN
-    model = createDNN((dimensions[0], dimensions[1]))
+    model = create_cnn((dimensions[0], dimensions[1]))
     model.load_weights('name_attempt_distortion2sd.weights.h5')   
 
     predictions = model.predict(test_data, verbose=0)
@@ -213,7 +222,7 @@ def test_visual_example(video, dimensions):
                 Returns Nothing.
     """
 
-    model = createDNN((dimensions[0], dimensions[1], dimensions[2]))
+    model = create_cnn((dimensions[0], dimensions[1], dimensions[2]))
     model.load_weights('visual.weights.h5')
     cap = cv2.VideoCapture(video)
     frames_arr = []
@@ -267,21 +276,21 @@ def test_visual_example(video, dimensions):
 
 
 """This code was to optimise the CNN without importing GridSearch, redundant."""
-# def optimise():
+# def optimise(vis_x_train, vis_y_train):
 #     param_grid = {
 #         'epochs': [10, 15,20],
 #     }
 #     #print(X_train.shape)
-#     a = createDNN((max_visual0,max_visual1,max_visual2))
-#     a.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=Adam(learning_rate=0.001))
+#     model = create_cnn((max_visual0,max_visual1,max_visual2))
+#     model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=Adam(learning_rate=0.001))
 
-#     model = KerasClassifier(model=a)
-#     print(model.get_params().keys())
-#     gs = GridSearchCV(estimator=model, param_grid=param_grid, cv=2)
-#     gs = gs.fit(vis_x_train, vis_y_train)
-#     ga = gs.cv_results_
-#     print(ga)
-#     #gs = gs.predict(vis_x_test)
+#     model_keras = KerasClassifier(model=a)
+#     print(model_keras.get_params().keys())
+#     grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=2)
+#     grid_search = grid_search.fit(vis_x_train, vis_y_train)
+#     results = grid_search.cv_results_
+#     print(results)
+#
 #     print(f'Best params: {gs.best_params_}')
 #     print(f'Best score: {gs.best_score_}')
 # #optimise()
@@ -303,10 +312,10 @@ def avp_li(audio_dimensions, visual_dimensions,
                 Returns Nothing.
     """
 
-    visual_network = createDNN((visual_dimensions[0],
+    visual_network = create_cnn((visual_dimensions[0],
                                 visual_dimensions[1],
                                 visual_dimensions[2]))
-    audio_network = createDNN(((audio_dimensions[0],
+    audio_network = create_cnn(((audio_dimensions[0],
                                 audio_dimensions[1]
                                 , 1)))
     
@@ -396,6 +405,6 @@ visual_dimensions = get_max_dimensionality('visual')
 audio_dimensions = get_max_dimensionality('audio')
 visual_arr, visual_labels = visual_npy(visual_dimensions)
 aud_arr, aud_labels = audio_npy(audio_dimensions)
-#avp_li(audio_dimensions, visual_dimensions, visual_arr, visual_labels, aud_arr, aud_labels)
+# avp_li(audio_dimensions, visual_dimensions, visual_arr, visual_labels, aud_arr, aud_labels)
 
 test_voice(audio_dimensions)
